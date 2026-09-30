@@ -4,10 +4,10 @@ const hex = value => [1, 3, 5].map(offset => parseInt(value.slice(offset, offset
 const stops = (...values) => values.map(hex);
 
 export const palettes = [
-  { id: 'auto', name: 'Del diseño' },
+  { id: 'auto', name: 'Predeterminado', hidden: true },
   { id: 'colors', name: 'Personalizada', hidden: true, wled: '* Colors 1&2', fallback: 3, usesColors: true },
-  { id: 'color1', name: 'Color principal', wled: '* Color 1', fallback: 2, usesColors: true },
-  { id: 'original', name: 'Original', wled: 'Default', fallback: 0, usesColors: true },
+  { id: 'color1', name: 'Color principal', hidden: true, wled: '* Color 1', fallback: 2, usesColors: true },
+  { id: 'original', name: 'Predeterminado', wled: 'Default', fallback: 0, usesColors: true },
   { id: 'gradient3', name: 'Degradado de 3 colores', hidden: true, wled: '* Color Gradient', fallback: 4, usesColors: true, threeColors: true },
   { id: 'bands3', name: 'Mis 3 colores en bandas', hidden: true, wled: '* Colors Only', fallback: 5, usesColors: true, threeColors: true },
   { id: 'rainbow', name: 'Arcoíris', wled: 'Rainbow', fallback: 11, stops: stops('#ff345f', '#ffae32', '#e6ff48', '#36ed9f', '#23cbff', '#6655ff', '#ed48e8', '#ff345f') },

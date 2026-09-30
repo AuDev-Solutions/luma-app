@@ -47,22 +47,28 @@ export const initialScene = { on: true, faces: [{ ...initialFace }, { ...initial
 export const effectById = (id) => effects.find((effect) => effect.id === id) ?? effects[0];
 export const hexToRgb = (hex) => [1, 3, 5].map((offset) => parseInt(hex.slice(offset, offset + 2), 16));
 export const faceIntensity = face => face.intensity ?? percent(effectById(face.effect).intensity ?? 128);
-// The palette WLED receives: the user's choice, or the design's curated palette.
+// The palette WLED receives: the user's choice, else «Predeterminado» (palette 0). Only designs whose look
+// depends on a named palette (Fuego, Aurora boreal, Plasma…) start with it.
 export function paletteKey(face) {
   if (face.palette && face.palette !== 'auto') return face.palette;
-  const effect = effectById(face.effect);
-  return effect.palette ?? (effect.spectrum ? 'rainbow' : effect.singleColor ? 'original' : 'colors');
+  const own = effectById(face.effect).palette;
+  return own && !paletteById(own)?.usesColors ? own : 'original';
 }
+// With palette 0 these WLED effects draw from the colour wheel (FX.cpp), not from the user's colours.
+const wheelEffects = new Set(['rainbow', 'starburst', 'juggle']);
+export const usesWheel = face => paletteKey(face) === 'original' && wheelEffects.has(face.effect);
 // Colour pickers only matter when WLED builds the palette from them.
 export function usesColors(face) {
   const key = paletteKey(face);
-  return !!paletteById(key)?.usesColors && !(key === 'original' && effectById(face.effect).ownPalette);
+  const effect = effectById(face.effect);
+  return !!paletteById(key)?.usesColors && !(key === 'original' && effect.ownPalette) && !usesWheel(face);
 }
 const mix = (a, b, amount) => a.map((value, index) => Math.round(value + (b[index] - value) * amount));
 const wrap = value => ((value % 1) + 1) % 1;
 const hash = value => wrap(Math.sin(value * 127.1 + 311.7) * 43758.5453);
 export function previewStops(face, preparedColors) {
-  const named = paletteById(paletteKey(face))?.stops;
+  // With palette 0, WLED paints multicolour designs with its colour wheel / Party colours.
+  const named = paletteById(usesWheel(face) ? 'rainbow' : paletteKey(face))?.stops;
   if (named) return named;
   const colors = preparedColors ?? face.colors.map(hexToRgb);
   if (paletteById(paletteKey(face))?.threeColors) return paletteKey(face) === 'bands3' ? [colors[0], colors[0], colors[1], colors[1], colors[2] ?? colors[0], colors[2] ?? colors[0]] : [colors[0], colors[1], colors[2] ?? colors[0]];

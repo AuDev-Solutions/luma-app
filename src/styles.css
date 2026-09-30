@@ -65,6 +65,6 @@
 @media(max-width:760px){.master-bar{flex-wrap:wrap;gap:10px}.master-brightness{flex-basis:100%}.master-actions{width:100%;justify-content:flex-end}.theme-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.editor-tabs button{flex-direction:column;gap:3px;font-size:11px;min-height:52px}.pick-list{grid-template-columns:1fr}.field-row{flex-wrap:wrap}.field-row select,.field-row input{flex:1 1 100%;font-size:16px}.inline-form{flex-direction:column;align-items:stretch}.inline-form input,.inline-number input,.location-fields input{font-size:16px}}
 .inline-number{justify-content:flex-start}
 
-@media(max-width:400px){.app-shell{padding:0 14px}.brand{letter-spacing:3px;gap:8px}.header-actions{gap:6px}.settings-button,.connect-button{padding:0 9px}}
+@media(max-width:400px){.app-shell{padding-left:14px;padding-right:14px}.brand{letter-spacing:3px;gap:8px}.header-actions{gap:6px}.settings-button,.connect-button{padding:0 9px}}
 @media(max-width:340px){.connect-button span{display:none}}
 .status-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}.status-dot.on{background:#3ddc6f;box-shadow:0 0 8px #3ddc6f99}.status-dot.off{background:#ff4d4d;box-shadow:0 0 8px #ff4d4d80}

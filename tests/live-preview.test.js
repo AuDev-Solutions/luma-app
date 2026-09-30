@@ -22,16 +22,16 @@ test('Rain always fades to black, including scenes saved with the old blue backg
   face.colors[1] = '#092355';
   const device = { count: 100, effects: ['Rain'], state: { seg: [{ id: 0, start: 0, stop: 100 }] } };
   const payload = buildPayload({ on: true, faces: [face, face] }, device, 50);
-  assert.equal(payload.seg[0].pal, 2);
+  assert.equal(payload.seg[0].pal, 0); // Predeterminado
   assert.deepEqual(payload.seg[0].col[1], [0, 0, 0]);
   assert.equal(pixelColor(face, 0.2, 0, 10).intensity, 0);
 });
 
-test('Fireworks 1D resolves the native effect and uses its full spectrum', () => {
+test('Fireworks 1D resolves the native effect with the default palette', () => {
   const face = presetFace(effects.find(effect => effect.id === 'fireworks'));
   const device = { count: 100, effects: ['Solid', 'Fireworks 1D'], state: { seg: [{ id: 0, start: 0, stop: 100 }] } };
   const payload = buildPayload({ on: true, faces: [face, face] }, device, 50);
-  assert.equal(payload.seg[0].fx, 1); assert.equal(payload.seg[0].pal, 11);
+  assert.equal(payload.seg[0].fx, 1); assert.equal(payload.seg[0].pal, 0); // Predeterminado
   assert.deepEqual(payload.seg[0].col[1], [0, 0, 0]);
   const restored = sceneFromDevice({ ...device, state: payload });
   assert.equal(restored.faces[0].effect, 'fireworks');
