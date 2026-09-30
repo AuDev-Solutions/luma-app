@@ -65,6 +65,7 @@ export function previewStops(face, preparedColors) {
   const named = paletteById(paletteKey(face))?.stops;
   if (named) return named;
   const colors = preparedColors ?? face.colors.map(hexToRgb);
+  if (paletteById(paletteKey(face))?.threeColors) return paletteKey(face) === 'bands3' ? [colors[0], colors[0], colors[1], colors[1], colors[2] ?? colors[0], colors[2] ?? colors[0]] : [colors[0], colors[1], colors[2] ?? colors[0]];
   return paletteKey(face) === 'color1' || effectById(face.effect).singleColor ? [colors[0], colors[0]] : colors;
 }
 export function paletteColor(face, amount, preparedColors) {
@@ -171,8 +172,8 @@ export function pixelColor(face, position, time, index, preparedColors) {
 
 const paletteKeys = new Set(palettes.map(item => item.id));
 export function validScene(scene) {
-  return scene && typeof scene.on === 'boolean' && Array.isArray(scene.faces) && (scene.segments ? scene.faces.length >= 1 && scene.faces.length <= 16 && !segmentError(scene, scene.total) : scene.faces.length === 2) && (scene.transition === undefined || Number.isFinite(scene.transition) && scene.transition >= 0 && scene.transition <= 65) && scene.faces.every(face =>
-    effects.some(effect => effect.id === face.effect) && Array.isArray(face.colors) && face.colors.length === 2 &&
+  return scene && typeof scene.on === 'boolean' && Array.isArray(scene.faces) && (scene.segments ? scene.faces.length >= 1 && scene.faces.length <= 16 && !segmentError(scene, scene.total) : scene.faces.length === 2) && (scene.transition === undefined || Number.isFinite(scene.transition) && scene.transition >= 0 && scene.transition <= 65) && (scene.bri === undefined || Number.isFinite(scene.bri) && scene.bri >= 1 && scene.bri <= 100) && scene.faces.every(face =>
+    effects.some(effect => effect.id === face.effect) && Array.isArray(face.colors) && (face.colors.length === 2 || face.colors.length === 3) &&
     face.colors.every(color => /^#[0-9a-f]{6}$/i.test(color)) &&
     Number.isFinite(face.brightness) && face.brightness >= 0 && face.brightness <= 100 &&
     Number.isFinite(face.speed) && face.speed >= 0 && face.speed <= 100 &&

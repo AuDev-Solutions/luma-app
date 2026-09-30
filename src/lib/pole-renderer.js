@@ -123,7 +123,7 @@ export function createPoleRenderer(canvas, background) {
           if (intensity < 0.005) continue;
           const fraction = palettePosition;
           const sprite = palette.sprites[Math.max(0, Math.min(PALETTE_SIZE - 1, Math.round(fraction * (PALETTE_SIZE - 1))))];
-          ctx.globalAlpha = intensity;
+          ctx.globalAlpha = intensity * (config.scene.bri ?? 100) / 100;
           const compact = width < 500 || height < 300;
           const top = compact ? 34 : 58, bottom = height - (compact ? 60 : 102);
           ctx.drawImage(sprite, x - 32, bottom - row(index, i) * (bottom - top) / (config.count - 1) - 32, SPRITE_SIZE, SPRITE_SIZE);

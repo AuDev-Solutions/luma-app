@@ -52,19 +52,28 @@ export function normalizeAddress(value) {
   return address.origin;
 }
 
-async function request(address, path, body) {
+// Settings PIN (WLED › Security): required for configuration changes when the owner set one.
+let settingsPin = '';
+export function setSettingsPin(pin) { settingsPin = pin || ''; }
+export const hasSettingsPin = () => !!settingsPin;
+export class PinRequiredError extends Error {}
+
+export async function request(address, path, body) {
+  if (body && settingsPin && typeof body === 'object' && !(body instanceof FormData)) body = { ...body, pin: settingsPin };
   let response;
   try {
     response = await fetch(`${address}${path}`, {
       method: body ? 'POST' : 'GET',
-      ...(body ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {}),
+      ...(body instanceof FormData ? { body } : body ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {}),
       signal: AbortSignal.timeout(6000), cache: 'no-store',
     });
   } catch {
     throw new Error('No se pudo comunicar con el poste. Conéctate a su Wi-Fi, revisa la dirección y permite el acceso a la red local si el navegador lo solicita.');
   }
+  if (response.status === 401) throw new PinRequiredError(settingsPin ? 'El PIN de ajustes no es correcto.' : 'Este poste está protegido con un PIN de ajustes. Escríbelo en Mi montaje › Seguridad.');
   if (!response.ok) throw new Error(`El poste respondió con un error (${response.status}).`);
-  const data = await response.json();
+  // /upload answers in plain text; everything else is JSON.
+  const data = await response.json().catch(() => ({}));
   if (data.error) throw new Error(`El poste rechazó el cambio (código ${data.error}).`);
   return data;
 }
@@ -75,7 +84,7 @@ export async function connectWled(value, { metadata = true } = {}) {
   if (!data.info?.leds || !Array.isArray(data.effects) || !Array.isArray(data.state?.seg)) throw new Error('La dirección no corresponde a un controlador de LED compatible.');
   // Optional: older firmware without /json/fxdata still works with LUMA's own parameters.
   const fxDefaults = metadata ? await request(address, '/json/fxdata').then(parseFxData, () => null) : null;
-  return { address, name: data.info.name || 'Poste 01', count: data.info.leds.count, maxSegments: Math.min(MAX_SEGMENTS, data.info.leds.maxseg ?? data.info.maxseg ?? MAX_SEGMENTS), live: !!data.info.live, effects: data.effects, palettes: Array.isArray(data.palettes) ? data.palettes : null, fxDefaults, state: data.state };
+  return { address, name: data.info.name || 'Poste 01', count: data.info.leds.count, maxSegments: Math.min(MAX_SEGMENTS, data.info.leds.maxseg ?? data.info.maxseg ?? MAX_SEGMENTS), live: !!data.info.live, effects: data.effects, palettes: Array.isArray(data.palettes) ? data.palettes : null, fxDefaults, state: data.state, info: data.info };
 }
 
 // Explicit editor layouts replace segment bounds; legacy scenes retain face-layout checks.
@@ -94,7 +103,7 @@ export function buildPayload(scene, device, count, faceCount = 2, target = 'all'
     if (!selected.some(Boolean)) selected.fill(true);
     const seg = scene.segments.map((item, index) => ({ ...facePayload(scene.faces[index], index, device), n: item.name, start: item.start, stop: item.stop, grp: 1, spc: 0, of: 0, sel: selected[index] }));
     const removed = device.state.seg.filter(item => item.stop > item.start && item.id >= seg.length).map(item => ({ id: item.id, stop: 0 }));
-    return { on: scene.on, bri: 255, transition: Math.round((scene.transition ?? 0.4) * 10), mainseg: selected.indexOf(true), seg: [...seg, ...removed] };
+    return { on: scene.on, bri: masterBri(scene), transition: Math.round((scene.transition ?? 0.4) * 10), mainseg: selected.indexOf(true), seg: [...seg, ...removed] };
   }
   const active = device.state.seg.filter(segment => segment.stop > segment.start);
   const defaultLayout = active.length === 1 && active[0].id === 0 && active[0].start === 0 &&
@@ -108,7 +117,7 @@ export function buildPayload(scene, device, count, faceCount = 2, target = 'all'
   }
   if (device.state.seg.some(segment => segment.id >= faceCount && segment.stop > segment.start)) throw new Error(`Hay segmentos adicionales activos en el controlador. Deja únicamente ${faceCount === 1 ? 'la tira de prueba' : 'las dos caras'} antes de aplicar.`);
   return {
-    on: scene.on, bri: 255, transition: Math.round((scene.transition ?? 0.4) * 10),
+    on: scene.on, bri: masterBri(scene), transition: Math.round((scene.transition ?? 0.4) * 10),
     seg: scene.faces.slice(0, faceCount).map((face, id) => ({ ...facePayload(face, id, device), ...(defaultLayout ? { start: id * count, stop: (id + 1) * count, grp: 1, spc: 0, of: 0 } : {}) })),
   };
 }
@@ -132,6 +141,23 @@ export async function applyWled(scene, device, count, faceCount = 2, target = 'a
   return confirmed;
 }
 
+// Master brightness for the whole pole (WLED global bri); segments keep their own level on top.
+const masterBri = scene => Math.max(1, Math.round((scene.bri ?? 100) * 255 / 100));
+
+// Live editing: send without the full read-back confirmation, at most a few times per second.
+export async function sendScene(scene, device, count, faceCount, target) {
+  const payload = buildPayload(scene, device, count, faceCount, target);
+  await request(device.address, '/json/state', payload);
+  return payload;
+}
+
+// Presets must not depend on the layout present when they were saved: clear every other LUMA segment.
+export function presetPayload(scene, device, count, faceCount) {
+  const payload = buildPayload(scene, { ...device, state: { seg: [] } }, count, faceCount, 'all');
+  const extra = Array.from({ length: Math.max(0, (device.maxSegments ?? MAX_SEGMENTS) - scene.segments.length) }, (_, i) => ({ id: scene.segments.length + i, stop: 0 }));
+  return { ...payload, seg: [...payload.seg, ...extra] };
+}
+
 function facePayload(face, id, device) {
   const effect = effectById(face.effect);
   const fx = resolveEffect(effect, device.effects);
@@ -141,7 +167,7 @@ function facePayload(face, id, device) {
     sx: Math.round(face.speed * 255 / 100), ix: Math.round(faceIntensity(face) * 255 / 100),
     ...(device.fxDefaults?.[fx] || {}), ...(effect.params || {}),
     pal: resolvePalette(paletteKey(face), device.palettes), rev: !!face.reverse, mi: !!face.mirror,
-    col: [hexToRgb(face.colors[0]), effect.darkBackground ? [0, 0, 0] : hexToRgb(face.colors[1]), [0, 0, 0]],
+    col: [hexToRgb(face.colors[0]), effect.darkBackground ? [0, 0, 0] : hexToRgb(face.colors[1]), face.colors[2] ? hexToRgb(face.colors[2]) : [0, 0, 0]],
   };
 }
 
