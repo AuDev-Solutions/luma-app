@@ -27,4 +27,4 @@ for (const file of files) {
 const check = await fetch(`${base}/luma.htm`, { signal: AbortSignal.timeout(10000) });
 const body = await check.text();
 if (!check.ok || !body.includes('LUMA')) throw new Error(`El poste no sirve LUMA correctamente (${check.status}).`);
-console.log(`LUMA instalada en ${info.name || 'el poste'}. Ábrela en ${base}/luma.htm (y en el Wi-Fi propio del poste: http://4.3.2.1/luma.htm).`);
+console.log(`LUMA instalada en el poste. Ábrela en ${base}/luma.htm (y en el Wi-Fi propio del poste: http://4.3.2.1/luma.htm).`);

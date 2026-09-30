@@ -78,13 +78,16 @@ export async function request(address, path, body) {
   return data;
 }
 
+// The firmware's factory name is not shown to users.
+const poleName = name => !name || /^wled$/i.test(name.trim()) ? 'Poste 01' : name;
+
 export async function connectWled(value, { metadata = true } = {}) {
   const address = normalizeAddress(value);
   const data = await request(address, '/json');
   if (!data.info?.leds || !Array.isArray(data.effects) || !Array.isArray(data.state?.seg)) throw new Error('La dirección no corresponde a un controlador de LED compatible.');
   // Optional: older firmware without /json/fxdata still works with LUMA's own parameters.
   const fxDefaults = metadata ? await request(address, '/json/fxdata').then(parseFxData, () => null) : null;
-  return { address, name: data.info.name || 'Poste 01', count: data.info.leds.count, maxSegments: Math.min(MAX_SEGMENTS, data.info.leds.maxseg ?? data.info.maxseg ?? MAX_SEGMENTS), live: !!data.info.live, effects: data.effects, palettes: Array.isArray(data.palettes) ? data.palettes : null, fxDefaults, state: data.state, info: data.info };
+  return { address, name: poleName(data.info.name), count: data.info.leds.count, maxSegments: Math.min(MAX_SEGMENTS, data.info.leds.maxseg ?? data.info.maxseg ?? MAX_SEGMENTS), live: !!data.info.live, effects: data.effects, palettes: Array.isArray(data.palettes) ? data.palettes : null, fxDefaults, state: data.state, info: data.info };
 }
 
 // Explicit editor layouts replace segment bounds; legacy scenes retain face-layout checks.
