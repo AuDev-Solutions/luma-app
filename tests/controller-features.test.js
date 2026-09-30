@@ -80,6 +80,7 @@ test('Current limit keeps the output definition; PIN travels with configuration 
 test('Status helpers: clock at 1970 is invalid; AP and OTA security', () => {
   assert.equal(clockStatus({ time: '1970-1-1, 01:30:32' }).valid, false);
   assert.equal(clockStatus({ time: '2026-9-30, 21:10:00' }).valid, true);
+  assert.equal(clockStatus({ time: '2106-2-7, 01:28:53' }).valid, false);
   assert.deepEqual(securityStatus({ ap: { pskl: 8 }, ota: { lock: false } }), { apPassword: true, apDefault: true, otaLocked: false });
 });
 

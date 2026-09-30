@@ -87,7 +87,8 @@ export async function syncClock(address, config) {
 
 export function clockStatus(info) {
   const year = Number(String(info?.time || '').split('-')[0]);
-  return { valid: year >= 2024, text: info?.time || 'desconocida' };
+  // 2106 appears when the unset clock (0) wraps below zero after the UTC offset is applied.
+  return { valid: year >= 2024 && year < 2100, text: info?.time || 'desconocida' };
 }
 
 // hour 254 = sunset in WLED ≥ 16 (fcn_declare.h TH_SUNSET); minute is the offset (−120…120).
