@@ -76,7 +76,7 @@ async function open({ mobile = false, connect = true } = {}) {
   }
   return { page, pole, errors, close: () => context.close() };
 }
-const applied = async (page, text = 'Escena aplicada y confirmada por el poste.') => { await page.getByText(text).waitFor(); await page.getByRole('button', { name: 'Cerrar notificación' }).click(); };
+const applied = async (page, text = 'Escena aplicada. El poste la mostrará al encenderse y en el horario.') => { await page.getByText(text).waitFor(); await page.getByRole('button', { name: 'Cerrar notificación' }).click(); };
 
 test('Pole split in 4: each part keeps its colour when one effect is chosen for all', async () => {
   const { page, pole, errors, close } = await open();
@@ -120,6 +120,8 @@ test('Themes, master brightness and saving on the pole (without applying it whil
   await applied(page);
   const post = pole.posts.at(-1);
   assert.equal(post.bri, 153);
+  assert.equal(pole.presets[248].n, 'Escena aplicada'); assert.equal(pole.presets[248].on, true);
+  assert.ok(pole.cfgPosts.some(body => body.def?.ps === 248), 'applied scene becomes the boot scene');
   assert.equal(effects[post.seg[0].fx], 'Chase 2');
   const postsBeforeSave = pole.posts.length;
   await page.getByRole('button', { name: 'Guardar escena', exact: true }).click();

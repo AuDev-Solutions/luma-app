@@ -9,7 +9,9 @@ import { request, hasSettingsPin } from './wled.js';
 
 export const OFF_PRESET = 250;
 export const AUTO_PRESET = 249;
-const RESERVED = [OFF_PRESET, AUTO_PRESET];
+// «Aplicar al poste» keeps the scene here and makes it the boot scene and the schedule's default.
+export const APPLIED_PRESET = 248;
+const RESERVED = [OFF_PRESET, AUTO_PRESET, APPLIED_PRESET];
 
 export async function readPresets(address) {
   const data = await request(address, '/presets.json');
@@ -24,7 +26,7 @@ export function listScenes(presets) {
 }
 
 export function freePresetId(presets) {
-  for (let id = 1; id < AUTO_PRESET; id++) if (!presets[id] || !Object.keys(presets[id]).length) return id;
+  for (let id = 1; id < APPLIED_PRESET; id++) if (!presets[id] || !Object.keys(presets[id]).length) return id;
   return null;
 }
 
@@ -52,6 +54,15 @@ export async function deletePreset(address, id) {
   const presets = await readPresets(address);
   delete presets[id];
   await writePresets(address, presets);
+}
+
+// Always stored switched on, so the schedule's «encender» really turns the lights on.
+export async function rememberAppliedScene(address, { payload, scene }, config) {
+  const presets = await readPresets(address);
+  const { v, ...state } = payload;
+  presets[APPLIED_PRESET] = { n: 'Escena aplicada', ...state, on: true, luma: scene };
+  await writePresets(address, presets);
+  if (config?.def?.ps !== APPLIED_PRESET) await setBootPreset(address, APPLIED_PRESET);
 }
 
 export const applyPreset = (address, id) => request(address, '/json/state', { ps: id });

@@ -10,7 +10,7 @@ import SettingsModal from './components/SettingsModal.jsx';
 import { prepareScene, segmentError } from './lib/segments.js';
 import { effectById, initialScene, readSavedScenes, presetFace } from './lib/scenes.js';
 import { applyWled, connectWled, sceneFromDevice, setLedCount, sendScene, presetPayload, request, setSettingsPin, PinRequiredError } from './lib/wled.js';
-import { readPresets, listScenes, saveScenePreset, deletePreset, applyPreset, saveAutoMode, syncClock, clockStatus, saveSchedule, clearSchedule, setBootPreset, setCurrentLimit, localOffsetSeconds } from './lib/controller.js';
+import { readPresets, listScenes, rememberAppliedScene, saveScenePreset, deletePreset, applyPreset, saveAutoMode, syncClock, clockStatus, saveSchedule, clearSchedule, setBootPreset, setCurrentLimit, localOffsetSeconds } from './lib/controller.js';
 import { subscribeLivePreview } from './lib/live-preview.js';
 import { mountById, mountFor, supportedTotals } from './lib/mounts.js';
 
@@ -190,7 +190,9 @@ export default function App() {
     await run(async () => {
       const confirmed = await applyWled(scene, device, count, faceCount, target);
       lastLayout.current = confirmed; syncedScene.current = sceneRef.current;
-    }, 'Escena aplicada y confirmada por el poste.');
+      await rememberAppliedScene(device.address, { payload: presetPayload(scene, device, count, faceCount), scene }, poleConfig);
+      await refreshPole(device.address);
+    }, 'Escena aplicada. El poste la mostrará al encenderse y en el horario.');
   }
   // Always live while connected: every edit reaches the pole, throttled.
   const syncedScene = useRef(null);

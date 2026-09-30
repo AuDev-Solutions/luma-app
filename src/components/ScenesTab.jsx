@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ArrowUpRight, Trash2, Play, Pencil, Power, Clock, Repeat, MapPin, Sunset } from 'lucide-react';
 import { themes } from '../lib/themes.js';
-import { readSchedule, clockStatus } from '../lib/controller.js';
+import { readSchedule, clockStatus, APPLIED_PRESET } from '../lib/controller.js';
 
 const swatch = colors => ({ background: `linear-gradient(135deg, ${colors.join(',')})` });
 
@@ -32,8 +32,8 @@ function Schedule({ poleScenes, poleConfig, device, busy, saveSchedule, clearSch
   return <section className="scenes-section" aria-labelledby="schedule-title">
     <h3 id="schedule-title"><Clock size={16} />Horario</h3>
     <p className={`clock-status ${clock.valid ? 'ok' : 'warn'}`}>{clock.valid ? `Hora del poste: ${clock.text}` : 'El poste no sabe la hora (no tiene internet ni pila de reloj).'} <button className="link-button" onClick={syncClock} disabled={busy}>Poner la hora de este teléfono</button></p>
-    {poleScenes.length === 0 ? <p className="empty-note">Guarda una escena en el poste para programar el encendido.</p> : <>
-      <label className="field-row">Escena al encender<select value={form.onPreset ?? poleScenes[0].id} onChange={event => patch({ onPreset: Number(event.target.value) })}>{poleScenes.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+    <>
+      <label className="field-row">Escena al encender<select value={form.onPreset ?? APPLIED_PRESET} onChange={event => patch({ onPreset: Number(event.target.value) })}><option value={APPLIED_PRESET}>La última aplicada</option>{poleScenes.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
       <div className="choice-row" role="radiogroup" aria-label="Cuándo encender">
         <button role="radio" aria-checked={form.onMode === 'sunset'} onClick={() => patch({ onMode: 'sunset' })}><Sunset size={15} />Al anochecer</button>
         <button role="radio" aria-checked={form.onMode === 'time'} onClick={() => patch({ onMode: 'time' })}><Clock size={15} />A una hora</button>
@@ -46,16 +46,18 @@ function Schedule({ poleScenes, poleConfig, device, busy, saveSchedule, clearSch
         </>}
       <label className="check-row compact"><input type="checkbox" checked={form.offEnabled} onChange={event => patch({ offEnabled: event.target.checked })} /><span><strong>Apagar a una hora</strong></span></label>
       {form.offEnabled && <label className="field-row">Apagar a las<input type="time" value={form.offTime} onChange={event => patch({ offTime: event.target.value })} /></label>}
-      <div className="segment-actions"><button className="primary-button" disabled={busy || needsLocation} onClick={() => saveSchedule({ ...form, onPreset: form.onPreset ?? poleScenes[0].id })}>Guardar horario</button>{form.enabled && <button className="secondary-button" disabled={busy} onClick={clearSchedule}>Quitar horario</button>}</div>
+      <div className="segment-actions"><button className="primary-button" disabled={busy || needsLocation} onClick={() => saveSchedule({ ...form, onPreset: form.onPreset ?? APPLIED_PRESET })}>Guardar horario</button>{form.enabled && <button className="secondary-button" disabled={busy} onClick={clearSchedule}>Quitar horario</button>}</div>
       {needsLocation && <p className="segment-help">Indica la ubicación para calcular el anochecer.</p>}
       <p className="storage-note">Usa la hora local de este teléfono ({Intl.DateTimeFormat().resolvedOptions().timeZone}). Con internet en el Wi-Fi del poste, la hora se mantiene sola tras un corte de luz; sin internet, ábrelo desde LUMA para ponerla en hora.</p>
-    </>}
+    </>
   </section>;
 }
 
 export default function ScenesTab({ connected, busy, loadTheme, savedScenes, loadScene, removeScene, poleScenes, poleConfig, device, applyPoleScene, editPoleScene, deletePoleScene, setBootScene, startAuto, stopAuto, saveSchedule, clearSchedule, syncClock }) {
   const bootId = poleConfig?.def?.ps;
   return <div className="scenes-tab">
+    {connected && <Schedule poleScenes={poleScenes} poleConfig={poleConfig} device={device} busy={busy} saveSchedule={saveSchedule} clearSchedule={clearSchedule} syncClock={syncClock} />}
+
     <section className="scenes-section" aria-labelledby="themes-title">
       <h3 id="themes-title">Temas</h3>
       <div className="theme-grid">{themes.map(theme => <button key={theme.id} className="theme-card" onClick={() => loadTheme(theme)}><span className="theme-swatch" style={swatch(theme.swatch)} /><strong>{theme.name}</strong><small>{theme.description}</small></button>)}</div>
@@ -63,6 +65,7 @@ export default function ScenesTab({ connected, busy, loadTheme, savedScenes, loa
 
     {connected && <section className="scenes-section" aria-labelledby="pole-title">
       <h3 id="pole-title">En el poste <span className="count-chip">{poleScenes.length}</span></h3>
+      {bootId === APPLIED_PRESET && <p className="segment-help">Al encenderse, el poste muestra la última escena que aplicaste.</p>}
       {poleScenes.length === 0 ? <p className="empty-note">Aún no hay escenas guardadas en el poste. Usa «Guardar escena» y deja marcada la opción «Guardar también en el poste».</p>
         : <ul className="pole-scenes">{poleScenes.map(item => <li key={item.id}>
           <span className="pole-scene-name"><strong>{item.name}</strong>{bootId === item.id && <small>Al encender</small>}</span>
@@ -74,7 +77,6 @@ export default function ScenesTab({ connected, busy, loadTheme, savedScenes, loa
     </section>}
 
     {connected && <AutoMode poleScenes={poleScenes} busy={busy} startAuto={startAuto} stopAuto={stopAuto} />}
-    {connected && <Schedule poleScenes={poleScenes} poleConfig={poleConfig} device={device} busy={busy} saveSchedule={saveSchedule} clearSchedule={clearSchedule} syncClock={syncClock} />}
 
     <section className="scenes-section" aria-labelledby="browser-title">
       <h3 id="browser-title">En este teléfono <span className="count-chip">{savedScenes.length}</span></h3>
