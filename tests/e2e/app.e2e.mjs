@@ -76,7 +76,15 @@ async function open({ mobile = false, connect = true } = {}) {
   }
   return { page, pole, errors, close: () => context.close() };
 }
-const applied = async (page, text = 'Escena aplicada. El poste la mostrará al encenderse y en el horario.') => { await page.getByText(text).waitFor(); await page.getByRole('button', { name: 'Cerrar notificación' }).click(); };
+// Live changes settle, then the pole keeps them as its boot scene (preset 248).
+async function settled(pole) {
+  for (let i = 0; i < 100; i++) {
+    const posts = pole.posts.length;
+    await new Promise(resolve => setTimeout(resolve, 150));
+    if (pole.presets[248] && pole.posts.length === posts && pole.uploads) return;
+  }
+  throw new Error('the pole never kept the scene');
+}
 
 test('Pole split in 4: each part keeps its colour when one effect is chosen for all', async () => {
   const { page, pole, errors, close } = await open();
@@ -89,8 +97,7 @@ test('Pole split in 4: each part keeps its colour when one effect is chosen for 
   await page.getByRole('tab', { name: 'Efectos' }).click();
   await page.getByRole('button', { name: 'Todos', exact: true }).last().click();
   await page.getByRole('button', { name: 'Seleccionar Onda esmeralda', exact: true }).click();
-  await page.getByRole('button', { name: 'Aplicar al poste', exact: true }).click();
-  await applied(page);
+  await settled(pole);
   const seg = pole.posts.at(-1).seg.filter(item => item.stop);
   assert.deepEqual(seg.map(item => [item.start, item.stop, effects[item.fx]]), [[0, 25, 'Running'], [25, 50, 'Running'], [50, 75, 'Running'], [75, 100, 'Running']]);
   assert.deepEqual(seg[1].col[0], [255, 0, 255]);
@@ -116,12 +123,11 @@ test('Themes, master brightness and saving on the pole (without applying it whil
   await page.getByRole('tab', { name: 'Escenas' }).click();
   await page.getByRole('button', { name: /Navidad/ }).click();
   await page.getByRole('slider', { name: 'Brillo general del poste' }).fill('60');
-  await page.getByRole('button', { name: 'Aplicar al poste', exact: true }).click();
-  await applied(page);
+  await settled(pole);
   const post = pole.posts.at(-1);
   assert.equal(post.bri, 153);
   assert.equal(pole.presets[248].n, 'Escena aplicada'); assert.equal(pole.presets[248].on, true);
-  assert.ok(pole.cfgPosts.some(body => body.def?.ps === 248), 'applied scene becomes the boot scene');
+  assert.ok(pole.cfgPosts.some(body => body.def?.ps === 248), 'the live scene becomes the boot scene');
   assert.equal(effects[post.seg[0].fx], 'Chase 2');
   const postsBeforeSave = pole.posts.length;
   await page.getByRole('button', { name: 'Guardar escena', exact: true }).click();

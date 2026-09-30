@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Bookmark, Play, Sun, Gauge, Eye, Sparkles, Palette, Droplet, Wand2, Rows3, LayoutGrid, Undo2, Redo2 } from 'lucide-react';
+import { Bookmark, Sun, Gauge, Eye, Sparkles, Palette, Droplet, Wand2, Rows3, LayoutGrid, Undo2, Redo2 } from 'lucide-react';
 import { effectById, faceIntensity, paletteKey, previewStops, usesColors, usesWheel } from '../lib/scenes.js';
 import { palettes, paletteById } from '../lib/palettes.js';
 import EffectGallery from './EffectGallery.jsx';
@@ -65,6 +65,6 @@ export default function SceneControls({ scene, face, target, setTarget, targetNa
     {tab === 'segments' && <div role="tabpanel" id="panel-segments" aria-labelledby="tab-segments" className="tab-panel">{segmentEditor}</div>}
     {tab === 'scenes' && <div role="tabpanel" id="panel-scenes" aria-labelledby="tab-scenes" className="tab-panel">{scenesTab}</div>}
 
-    <div className="action-dock"><div className="dock-scene"><strong>{target !== 'all' && scene.segments.length > 1 ? `${targetName} · ${effect.name}` : effect.name}</strong><button className="dock-preview" onClick={openPreview}><Eye size={17} />Ver poste</button></div><div className="actions"><button className="primary-button" disabled={busy || invalid} onClick={apply}><Play size={17} fill="currentColor" />{busy ? 'Aplicando…' : connected ? 'Aplicar al poste' : 'Probar escena'}</button><button className="secondary-button" disabled={invalid} onClick={save}><Bookmark size={18} />Guardar escena</button></div></div><p className="action-hint">{!connected ? 'Modo demostración. Explora antes de conectar tu poste.' : 'Cada cambio llega al poste al instante.'}</p>
+    <div className="action-dock"><div className="dock-scene"><strong>{target !== 'all' && scene.segments.length > 1 ? `${targetName} · ${effect.name}` : effect.name}</strong><button className="dock-preview" onClick={openPreview}><Eye size={17} />Ver poste</button></div><div className="actions"><button className="secondary-button" disabled={invalid} onClick={save}><Bookmark size={18} />Guardar escena</button></div></div><p className="action-hint">{!connected ? 'Modo demostración. Explora antes de conectar tu poste.' : 'Cada cambio llega al poste al instante y queda como su escena de encendido.'}</p>
   </section>;
 }
