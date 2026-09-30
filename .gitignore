@@ -4,3 +4,4 @@ dist/
 .local/
 .playwright-cli/
 *.log
+dist-poste/

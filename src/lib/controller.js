@@ -67,7 +67,12 @@ export async function saveAutoMode(address, { ids, minutes, transition = 0.7 }) 
 
 // The ESP32 has no battery-backed clock: without internet (NTP) it restarts at 1970.
 // WLED accepts the browser's time as a backup source ("time", json.cpp).
-export const syncClock = address => request(address, '/json/state', { time: Math.floor(Date.now() / 1000) });
+// The phone's UTC offset goes with it (fixed offset, tz 0) so the pole shows and schedules local time.
+export const localOffsetSeconds = () => -new Date().getTimezoneOffset() * 60;
+export async function syncClock(address, config) {
+  if (config?.if?.ntp?.offset !== localOffsetSeconds() || (config?.if?.ntp?.tz ?? 0) !== 0) await request(address, '/json/cfg', { if: { ntp: { tz: 0, offset: localOffsetSeconds() } } });
+  await request(address, '/json/state', { time: Math.floor(Date.now() / 1000) });
+}
 
 export function clockStatus(info) {
   const year = Number(String(info?.time || '').split('-')[0]);
@@ -91,7 +96,7 @@ export async function saveSchedule(address, schedule) {
     if: { ntp: { en: true, tz: 0, offset: schedule.utcOffsetSeconds, ...(schedule.onMode === 'sunset' ? { lt: schedule.latitude, ln: schedule.longitude } : {}) } },
     timers: { ins: scheduleTimers(schedule) },
   });
-  await syncClock(address);
+  await request(address, '/json/state', { time: Math.floor(Date.now() / 1000) });
 }
 
 export const clearSchedule = address => request(address, '/json/cfg', { timers: { ins: [] } });

@@ -10,7 +10,7 @@ import SettingsModal from './components/SettingsModal.jsx';
 import { prepareScene, segmentError } from './lib/segments.js';
 import { effectById, initialScene, readSavedScenes, presetFace } from './lib/scenes.js';
 import { applyWled, connectWled, sceneFromDevice, setLedCount, sendScene, presetPayload, request, setSettingsPin, PinRequiredError } from './lib/wled.js';
-import { readPresets, listScenes, saveScenePreset, deletePreset, applyPreset, saveAutoMode, syncClock, clockStatus, saveSchedule, clearSchedule, setBootPreset, setCurrentLimit } from './lib/controller.js';
+import { readPresets, listScenes, saveScenePreset, deletePreset, applyPreset, saveAutoMode, syncClock, clockStatus, saveSchedule, clearSchedule, setBootPreset, setCurrentLimit, localOffsetSeconds } from './lib/controller.js';
 import { subscribeLivePreview } from './lib/live-preview.js';
 import { mountById, mountFor, supportedTotals } from './lib/mounts.js';
 
@@ -138,6 +138,7 @@ export default function App() {
   async function refreshPole(address) {
     const [presets, config] = await Promise.all([readPresets(address).catch(() => ({})), request(address, '/json/cfg').catch(() => null)]);
     setPoleScenes(listScenes(presets)); setPoleConfig(config);
+    return config;
   }
   function adopt(connected) {
     const detected = mountFor(connected.count, mountId);
@@ -153,8 +154,8 @@ export default function App() {
       adopt(connected); setModal(null);
       writeSetting('luma-address', value); writeSetting('luma-autoconnect', 'true');
       // No battery-backed clock: give the pole this phone's time so schedules work offline.
-      if (!clockStatus(connected.info).valid) await syncClock(connected.address).catch(() => {});
-      await refreshPole(connected.address);
+      const config = await refreshPole(connected.address);
+      if (!clockStatus(connected.info).valid) await syncClock(connected.address, config).catch(() => {});
       notify(`Conectado a ${connected.name}.`);
     } catch (failure) { if (attempt === connectAttempt.current && !silent) setError(failure.message); else if (silent) notify('No se encontró el poste guardado. Conéctalo desde «Conectar poste».', 'error'); }
     finally { if (attempt === connectAttempt.current) setBusy(false); }
@@ -235,9 +236,9 @@ export default function App() {
     setBootScene={id => run(async () => { await setBootPreset(device.address, id); await refreshPole(device.address); }, 'El poste mostrará esa escena al encender.')}
     startAuto={(ids, minutes) => run(async () => { await saveAutoMode(device.address, { ids, minutes }); setLiveEdit(false); setPreviewMode('live'); }, `Modo automático: cambia cada ${minutes} min.`)}
     stopAuto={apply}
-    saveSchedule={form => run(async () => { await saveSchedule(device.address, { ...form, utcOffsetSeconds: -new Date().getTimezoneOffset() * 60 }); await refreshPole(device.address); }, 'Horario guardado en el poste.')}
+    saveSchedule={form => run(async () => { await saveSchedule(device.address, { ...form, utcOffsetSeconds: localOffsetSeconds() }); await refreshPole(device.address); }, 'Horario guardado en el poste.')}
     clearSchedule={() => run(async () => { await clearSchedule(device.address); await refreshPole(device.address); }, 'Horario eliminado.')}
-    syncClock={() => run(async () => { await syncClock(device.address); adopt(await connectWled(device.address)); }, 'Hora del poste actualizada.')} />;
+    syncClock={() => run(async () => { await syncClock(device.address, poleConfig); adopt(await connectWled(device.address)); await refreshPole(device.address); }, 'Hora del poste actualizada.')} />;
 
   return <div className="app-shell">
     <header className="header"><a className="brand" href="./" aria-label="Luma, inicio"><span className="brand-mark"><i /><i /><i /></span>LUMA</a><span className="brand-description">Control de iluminación</span><div className="header-actions"><span className={`connection-state ${device ? 'connected' : ''}`}><i />{device ? device.name : 'Modo demostración'}</span><button className="connect-button" onClick={() => openModal('connect')}><Link2 size={17} /><span>{device ? 'Conexión' : 'Conectar poste'}</span></button></div></header>

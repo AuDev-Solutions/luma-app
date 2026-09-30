@@ -14,6 +14,37 @@ Abrir http://localhost:5173. Desde el celular, conectado a la misma Wi-Fi del co
 
 La vista previa utiliza un fondo estático y sprites de luz reutilizados. La animación se suspende al pausar, ocultar la pestaña o desplazar la vista fuera de pantalla; el color fijo solo se redibuja cuando cambia un ajuste. La resolución interna se limita a 2×. En vistas estrechas se enfatiza el ancho de los LED y se reduce el halo vertical para distinguir los colores; la vista ampliada permite examinar una o ambas caras. Estos cambios no alteran los efectos que ejecuta WLED.
 
+## Instalar LUMA dentro del poste (sin PC)
+
+```powershell
+npm run build:poste                              # un solo archivo comprimido (~207 KB) en dist-poste/
+npm run instalar:poste -- 192.168.1.50          # añade PIN al final si el poste tiene uno
+```
+
+Luego abre `http://<ip-del-poste>/luma.htm` (en el Wi-Fi propio del poste: `http://4.3.2.1/luma.htm`). Se conecta sola y se puede añadir a la pantalla de inicio del teléfono. Instalada el 30-09-2026 en el poste 192.168.1.50.
+
+## Pruebas
+
+- `npm test`: 35 pruebas de lógica (segmentos, paletas, presets, horario, límites, temas).
+- `npm run test:e2e`: 7 recorridos en Chromium contra un poste simulado (4 colores, deshacer, temas, guardar en el poste, modo automático, horario, límite de corriente, en vivo, móvil). Usa `LUMA_CHROME` o el Chromium de Playwright instalado.
+
+## Novedades (30-09-2026)
+
+- **Escenas en el poste**: al guardar, la escena queda también en el controlador (disponible desde cualquier teléfono). Se escriben subiendo `presets.json`, sin cambiar las luces al guardar. Mostrar, editar, eliminar y elegir la escena **al encender**.
+- **Modo automático**: rota escenas del poste cada N minutos, sin teléfono conectado.
+- **Horario**: encender al anochecer (con ubicación) o a una hora, y apagar a una hora. El poste no tiene reloj con pila: con internet en su Wi-Fi mantiene la hora; si no, LUMA le da la hora del teléfono al conectar. La zona horaria se toma del teléfono.
+- **Temas**: Navidad, Noche de invierno, Año nuevo, Halloween, Amor y amistad, Fiestas patrias, Blanco cálido, Fiesta.
+- **Brillo general**, **En vivo** (cada cambio llega al instante), **Deshacer/Rehacer** (Ctrl+Z / Ctrl+Y), tercer color y paletas «Degradado de tus 3 colores» y «Tus 3 colores en bandas».
+- **Mi montaje › Consumo**: corriente estimada y límite; el límite se calcula con el 85 % de los amperios de la fuente. **Seguridad**: estado del Wi-Fi propio y de las actualizaciones remotas, enlace a los ajustes avanzados y PIN de ajustes.
+- Recuerda el poste y se reconecta al abrir. Instalable como app (manifest + service worker en https/localhost).
+
+## Estado del hardware (lectura del 30-09-2026)
+
+- ESP32-S3, 100 LEDs en GPIO 17, un solo segmento.
+- **Límite de corriente desactivado** (`maxpwr: 0`): configúralo en Mi montaje › Consumo con los amperios reales de la fuente.
+- Wi-Fi propio del poste con contraseña de 8 caracteres (probablemente la de fábrica) y actualizaciones remotas sin bloquear: cámbialos en los ajustes avanzados antes de instalarlo en la calle.
+- Recomendado en el montaje: adaptador de nivel 3,3 V → 5 V en la línea de datos (74AHCT125) con resistencia de ~330 Ω, condensador en la alimentación e inyección de corriente en tiras largas.
+
 ## Incluido
 
 - Vista animada de ambas caras, selección de cara, pausa y apagado de la vista previa.
@@ -39,7 +70,7 @@ El navegador debe permitir HTTP a la red local. Una app publicada con HTTPS pued
 
 «Borrador» simula la intención visual y no reproduce exactamente los algoritmos de WLED. «Poste en vivo» dibuja los RGB recibidos por WebSocket `/ws` mediante Peek (`lv:true`), sin sustituirlos por el simulador si se pierde la señal. Al editar se muestra el borrador; al aplicar correctamente se vuelve al poste en vivo. Hay latencia de red y diferencias ópticas entre pantalla y LED. WLED entrega Peek a un solo navegador a la vez: el otro mostrará falta de señal y podrá reconectar. Las asociaciones de los 20 diseños están en `design/EFFECTS-RESEARCH.md`. Los IDs se resuelven desde el controlador, no se presuponen; los diseños ausentes se deshabilitan al conectar. Se verifican también paleta, intensidad y ambos colores al aplicar. Algunos parámetros no son usados por todos los efectos físicos.
 
-Guardar escena conserva ajustes en este navegador; **no** crea presets ni cambia el encendido del equipo. No hay Bluetooth, nube, sincronización entre postes ni modo de control continuo. Desconectar la app conserva el estado del poste.
+Guardar escena conserva ajustes en este navegador y, si se marca, también en el poste. No hay Bluetooth, nube, efectos con música ni sincronización entre postes. Desconectar la app conserva el estado del poste.
 
 Fuentes del contrato: https://kno.wled.ge/interfaces/json-api/ y https://kno.wled.ge/interfaces/websocket/
 
