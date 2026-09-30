@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link2, SlidersHorizontal, Check } from 'lucide-react';
+import { SlidersHorizontal, Check } from 'lucide-react';
 import PolePreview from './components/PolePreview.jsx';
 import SegmentEditor from './components/SegmentEditor.jsx';
 import SceneControls from './components/SceneControls.jsx';
@@ -241,7 +241,7 @@ export default function App() {
     syncClock={() => run(async () => { await syncClock(device.address, poleConfig); adopt(await connectWled(device.address)); await refreshPole(device.address); }, 'Hora del poste actualizada.')} />;
 
   return <div className="app-shell">
-    <header className="header"><a className="brand" href="./" aria-label="Luma, inicio"><span className="brand-mark"><i /><i /><i /></span>LUMA</a><span className="brand-description">Control de iluminación</span><div className="header-actions"><span className={`connection-state ${device ? 'connected' : ''}`}><i />{device ? 'Conectado' : 'Modo demostración'}</span><button className="settings-button" onClick={() => openModal('settings')} aria-label="Mi montaje"><SlidersHorizontal size={17} /><span>Mi montaje</span></button><button className="connect-button" onClick={() => openModal('connect')}><Link2 size={17} /><span>{device ? 'Conexión' : 'Conectar poste'}</span></button></div></header>
+    <header className="header"><a className="brand" href="./" aria-label="Luma, inicio"><span className="brand-mark"><i /><i /><i /></span>LUMA</a><span className="brand-description">Control de iluminación</span><div className="header-actions"><button className="settings-button" onClick={() => openModal('settings')} aria-label="Mi montaje"><SlidersHorizontal size={17} /><span>Mi montaje</span></button><button className="connect-button" onClick={() => openModal('connect')} title={device ? 'Conectado al poste' : 'Sin conexión: modo demostración'}><i className={`status-dot ${device ? 'on' : 'off'}`} aria-hidden="true" /><span>{device ? 'Conexión' : 'Conectar poste'}</span></button></div></header>
     <main>
       <div className="workspace">
         <PolePreview expanded={previewExpanded} openPreview={openPreview} closePreview={closePreview} connected={!!device} mode={previewMode} setMode={setPreviewMode} liveFrame={liveFrame} liveStatus={liveStatus} retryLive={() => setLiveAttempt(value => value + 1)} scene={scene} count={count} faceCount={faceCount} faceBFromTop={faceBFromTop} view={view} setView={setView} onPower={() => updateScene({ ...scene, on: !scene.on })} />
