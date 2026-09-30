@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Bookmark, Play, Sun, Gauge, Eye, Sparkles, Palette, Droplet, Wand2, Rows3, LayoutGrid, Undo2, Redo2, Radio } from 'lucide-react';
+import { Bookmark, Play, Sun, Gauge, Eye, Sparkles, Palette, Droplet, Wand2, Rows3, LayoutGrid, Undo2, Redo2 } from 'lucide-react';
 import { effectById, faceIntensity, paletteKey, previewStops, usesColors } from '../lib/scenes.js';
 import { palettes, paletteById } from '../lib/palettes.js';
 import EffectGallery from './EffectGallery.jsx';
@@ -13,7 +13,7 @@ function Slider({ label, Icon, value, disabled, onChange }) {
   return <label className="slider-field"><span className="slider-label"><span><Icon size={15} />{label}</span><output>{value}<small>%</small></output></span><input type="range" min="0" max="100" aria-label={label} disabled={disabled} value={value} style={{ '--value': `${value}%` }} onChange={event => onChange(Number(event.target.value))} /></label>;
 }
 
-export default function SceneControls({ scene, face, target, setTarget, targetName, selectDesign, openPreview, updateFace, updateScene, segmentEditor, scenesTab, invalid, apply, save, busy, connected, deviceEffects, liveEdit, setLiveEdit, undo, redo, canUndo, canRedo }) {
+export default function SceneControls({ scene, face, target, setTarget, targetName, selectDesign, openPreview, updateFace, updateScene, segmentEditor, scenesTab, invalid, apply, save, busy, connected, deviceEffects, undo, redo, canUndo, canRedo }) {
   const [tab, setTab] = useState('colors');
   const effect = effectById(face.effect);
   const autoPalette = palettes.find(item => item.id === paletteKey({ ...face, palette: 'auto' }));
@@ -38,7 +38,6 @@ export default function SceneControls({ scene, face, target, setTarget, targetNa
       <div className="master-actions">
         <button className="icon-button" aria-label="Deshacer (Ctrl+Z)" title="Deshacer" disabled={!canUndo} onClick={undo}><Undo2 size={16} /></button>
         <button className="icon-button" aria-label="Rehacer (Ctrl+Y)" title="Rehacer" disabled={!canRedo} onClick={redo}><Redo2 size={16} /></button>
-        {connected && <button className="live-toggle" aria-pressed={liveEdit} disabled={invalid} onClick={() => setLiveEdit(!liveEdit)} title="Enviar cada cambio al poste al instante"><Radio size={15} />En vivo</button>}
       </div>
     </div>
     <div className="editor-tabs" role="tablist" aria-label="Editor">{tabs.map(([id, label, Icon]) => <button key={id} role="tab" id={`tab-${id}`} aria-controls={`panel-${id}`} aria-selected={tab === id} onClick={() => setTab(id)}><Icon size={16} />{label}</button>)}</div>
@@ -68,6 +67,6 @@ export default function SceneControls({ scene, face, target, setTarget, targetNa
     {tab === 'segments' && <div role="tabpanel" id="panel-segments" aria-labelledby="tab-segments" className="tab-panel">{segmentEditor}</div>}
     {tab === 'scenes' && <div role="tabpanel" id="panel-scenes" aria-labelledby="tab-scenes" className="tab-panel">{scenesTab}</div>}
 
-    <div className="action-dock"><div className="dock-scene"><strong>{target !== 'all' && scene.segments.length > 1 ? `${targetName} · ${effect.name}` : effect.name}</strong><button className="dock-preview" onClick={openPreview}><Eye size={17} />Ver poste</button></div><div className="actions"><button className="primary-button" disabled={busy || invalid} onClick={apply}><Play size={17} fill="currentColor" />{busy ? 'Aplicando…' : connected ? 'Aplicar al poste' : 'Probar escena'}</button><button className="secondary-button" disabled={invalid} onClick={save}><Bookmark size={18} />Guardar escena</button></div></div><p className="action-hint">{!connected ? 'Modo demostración. Explora antes de conectar tu poste.' : liveEdit ? 'En vivo: cada cambio llega al poste al instante.' : 'Los cambios se envían al pulsar Aplicar al poste.'}</p>
+    <div className="action-dock"><div className="dock-scene"><strong>{target !== 'all' && scene.segments.length > 1 ? `${targetName} · ${effect.name}` : effect.name}</strong><button className="dock-preview" onClick={openPreview}><Eye size={17} />Ver poste</button></div><div className="actions"><button className="primary-button" disabled={busy || invalid} onClick={apply}><Play size={17} fill="currentColor" />{busy ? 'Aplicando…' : connected ? 'Aplicar al poste' : 'Probar escena'}</button><button className="secondary-button" disabled={invalid} onClick={save}><Bookmark size={18} />Guardar escena</button></div></div><p className="action-hint">{!connected ? 'Modo demostración. Explora antes de conectar tu poste.' : 'Cada cambio llega al poste al instante.'}</p>
   </section>;
 }

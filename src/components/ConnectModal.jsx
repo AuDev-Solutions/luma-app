@@ -4,7 +4,7 @@ import Modal from './Modal.jsx';
 export default function ConnectModal({ device, address, setAddress, busy, error, connect, disconnect, close }) {
   if (device) return <Modal title="Tu conexión" close={close}>
     <div className="connection-card"><Radio size={25} /><div><strong>{device.name}</strong><p>{device.address} · {device.count} píxeles</p></div></div>
-    <p className="modal-copy">Los cambios de la vista previa se envían al pulsar «Aplicar al poste» o al instante si activas «En vivo». «Poste en vivo» recibe los colores del controlador. «Borrador» simula los ajustes antes de enviarlos. Esta app recordará el poste y se conectará sola la próxima vez.</p>
+    <p className="modal-copy">Con el poste conectado, cada cambio se envía al instante y la vista muestra los colores reales del poste. Esta app recordará el poste y se conectará sola la próxima vez.</p>
     <button className="secondary-button full" onClick={disconnect}><Unplug size={18} />Desconectar esta app</button>
   </Modal>;
   return <Modal title="Conecta tu poste" close={close}>

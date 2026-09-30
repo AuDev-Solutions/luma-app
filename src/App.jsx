@@ -34,7 +34,6 @@ export default function App() {
   const [poleConfig, setPoleConfig] = useState(null);
   const liveFrame = useRef(null);
   const [liveStatus, setLiveStatus] = useState('waiting');
-  const [previewMode, setPreviewMode] = useState('draft');
   const [previewExpanded, setPreviewExpanded] = useState(false);
   const previewTrigger = useRef(null);
   const [liveAttempt, setLiveAttempt] = useState(0);
@@ -45,7 +44,6 @@ export default function App() {
   const [toast, setToast] = useState(null);
   const [savedScenes, setSavedScenes] = useState(readSavedScenes);
   const [pin, setPinState] = useState('');
-  const [liveEdit, setLiveEdit] = useState(false);
   const timerRef = useRef(null);
   const connectAttempt = useRef(0);
 
@@ -76,7 +74,7 @@ export default function App() {
     if (direction === 'back') { history.current.past = past.slice(0, -1); history.current.future = [...future, sceneRef.current]; }
     else { history.current.future = future.slice(0, -1); history.current.past = [...past, sceneRef.current]; }
     history.current.last = 0;
-    sceneRef.current = target; setSceneState(target); setPreviewMode('draft');
+    sceneRef.current = target; setSceneState(target);
     setTarget(current => current === 'all' || target.segments.some(item => item.id === current) ? current : target.segments[0].id);
     setHistorySize({ past: history.current.past.length, future: history.current.future.length });
   }
@@ -104,7 +102,7 @@ export default function App() {
   // With a single segment there is nothing to choose: hide segment wording entirely.
   const targetName = scene.segments.length === 1 ? null : target === 'all' || targetIndex < 0 ? 'Todos los segmentos' : scene.segments[targetIndex].name || `Segmento ${target + 1}`;
   const layoutError = segmentError(scene, mountTotal, device?.maxSegments);
-  function updateScene(next) { setPreviewMode('draft'); setScene(next); }
+  function updateScene(next) { setScene(next); }
   useEffect(() => () => clearTimeout(timerRef.current), []);
   const notify = (message, type = 'success') => { clearTimeout(timerRef.current); setToast({ message, type }); if (type !== 'error') timerRef.current = setTimeout(() => setToast(null), 6000); };
   const openModal = name => { setError(''); setModal(name); };
@@ -130,7 +128,7 @@ export default function App() {
     const total = saved.total || mountTotal;
     if (device && total !== mountTotal) { notify(`Esta escena tiene ${total} LEDs y el poste ${mountTotal}.`, 'error'); return; }
     const fit = mountFor(total, mountId);
-    setPreviewMode('draft'); selectMount(fit.id, prepareScene(structuredClone(saved), total, fit.faceCount));
+    selectMount(fit.id, prepareScene(structuredClone(saved), total, fit.faceCount));
     if (message) notify(message);
   }
 
@@ -143,8 +141,10 @@ export default function App() {
   function adopt(connected) {
     const detected = mountFor(connected.count, mountId);
     if (!detected) throw new Error(`El controlador tiene ${connected.count} píxeles configurados. Este proyecto admite ${supportedTotals.join(', ')}.`);
-    setDevice(connected); setPreviewMode('live');
+    setDevice(connected); lastLayout.current = null;
     selectMount(detected.id, sceneFromDevice(connected) || prepareScene(initialScene, connected.count, detected.faceCount));
+    // What the pole already shows is not sent back to it.
+    syncedScene.current = sceneRef.current;
   }
   async function connectTo(value, { silent = false } = {}) {
     setBusy(true); setError(''); const attempt = ++connectAttempt.current;
@@ -165,7 +165,7 @@ export default function App() {
     else if (readSetting('luma-autoconnect', '') === 'true' && readSetting('luma-address', '')) connectTo(readSetting('luma-address', ''), { silent: true });
   }, []);
   function disconnect() {
-    setDevice(null); setPreviewMode('draft'); setLiveEdit(false); setPoleScenes([]); setPoleConfig(null);
+    setDevice(null); setPoleScenes([]); setPoleConfig(null);
     writeSetting('luma-autoconnect', 'false'); closeModal();
     notify('Modo demostración activado. El poste conserva su último estado.');
   }
@@ -189,25 +189,21 @@ export default function App() {
     if (!device) { notify('Escena probada en el simulador. Conecta tu poste para enviarla a las luces.'); return; }
     await run(async () => {
       const confirmed = await applyWled(scene, device, count, faceCount, target);
-      lastLayout.current = confirmed; setPreviewMode('live');
+      lastLayout.current = confirmed; syncedScene.current = sceneRef.current;
     }, 'Escena aplicada y confirmada por el poste.');
   }
-  // «En vivo»: first a confirmed apply to fix the layout, then throttled sends of every change.
+  // Always live while connected: every edit reaches the pole, throttled.
+  const syncedScene = useRef(null);
   useEffect(() => {
-    if (!liveEdit || !device || layoutError) return;
+    if (!device || layoutError || scene === syncedScene.current) return;
     const timer = setTimeout(() => {
+      if (scene === syncedScene.current) return; // already applied meanwhile
       sendScene(scene, { ...device, state: lastLayout.current || device.state }, count, faceCount, target)
-        .then(payload => { lastLayout.current = { ...lastLayout.current, seg: payload.seg.filter(item => item.stop !== 0) }; })
-        .catch(failure => { setLiveEdit(false); notify(`En vivo desactivado: ${failure.message}`, 'error'); });
+        .then(payload => { syncedScene.current = scene; lastLayout.current = { ...lastLayout.current, seg: payload.seg.filter(item => item.stop !== 0) }; })
+        .catch(failure => notify(`No se pudo enviar el cambio: ${failure.message}`, 'error'));
     }, 180);
     return () => clearTimeout(timer);
-  }, [scene, liveEdit]);
-  async function toggleLiveEdit(on) {
-    if (!on) { setLiveEdit(false); return; }
-    if (layoutError) { notify(layoutError, 'error'); return; }
-    await apply();
-    setLiveEdit(true);
-  }
+  }, [scene, device]);
 
   // ——— Saving
   async function save(name, onPole) {
@@ -230,11 +226,11 @@ export default function App() {
   const scenesTab = <ScenesTab connected={!!device} busy={busy} device={device} poleScenes={poleScenes} poleConfig={poleConfig}
     loadTheme={theme => loadIntoEditor(theme.build(mountTotal), `Tema «${theme.name}» cargado. Pulsa Aplicar para verlo en el poste.`)}
     savedScenes={savedScenes} loadScene={saved => loadIntoEditor(saved, 'Escena cargada en la vista previa.')} removeScene={removeScene}
-    applyPoleScene={item => run(async () => { await applyPreset(device.address, item.id); lastLayout.current = null; setLiveEdit(false); setPreviewMode('live'); }, `«${item.name}» en el poste.`)}
+    applyPoleScene={item => run(async () => { await applyPreset(device.address, item.id); lastLayout.current = null; syncedScene.current = sceneRef.current; }, `«${item.name}» en el poste.`)}
     editPoleScene={item => loadIntoEditor(item.scene, `«${item.name}» cargada en el editor.`)}
     deletePoleScene={item => run(async () => { await deletePreset(device.address, item.id); await refreshPole(device.address); }, `«${item.name}» eliminada del poste.`)}
     setBootScene={id => run(async () => { await setBootPreset(device.address, id); await refreshPole(device.address); }, 'El poste mostrará esa escena al encender.')}
-    startAuto={(ids, minutes) => run(async () => { await saveAutoMode(device.address, { ids, minutes }); setLiveEdit(false); setPreviewMode('live'); }, `Modo automático: cambia cada ${minutes} min.`)}
+    startAuto={(ids, minutes) => run(async () => { await saveAutoMode(device.address, { ids, minutes }); lastLayout.current = null; syncedScene.current = sceneRef.current; }, `Modo automático: cambia cada ${minutes} min.`)}
     stopAuto={apply}
     saveSchedule={form => run(async () => { await saveSchedule(device.address, { ...form, utcOffsetSeconds: localOffsetSeconds() }); await refreshPole(device.address); }, 'Horario guardado en el poste.')}
     clearSchedule={() => run(async () => { await clearSchedule(device.address); await refreshPole(device.address); }, 'Horario eliminado.')}
@@ -244,12 +240,12 @@ export default function App() {
     <header className="header"><a className="brand" href="./" aria-label="Luma, inicio"><span className="brand-mark"><i /><i /><i /></span>LUMA</a><span className="brand-description">Control de iluminación</span><div className="header-actions"><button className="settings-button" onClick={() => openModal('settings')} aria-label="Mi montaje"><SlidersHorizontal size={17} /><span>Mi montaje</span></button><button className="connect-button" onClick={() => openModal('connect')} title={device ? 'Conectado al poste' : 'Sin conexión: modo demostración'}><i className={`status-dot ${device ? 'on' : 'off'}`} aria-hidden="true" /><span>{device ? 'Conexión' : 'Conectar poste'}</span></button></div></header>
     <main>
       <div className="workspace">
-        <PolePreview expanded={previewExpanded} openPreview={openPreview} closePreview={closePreview} connected={!!device} mode={previewMode} setMode={setPreviewMode} liveFrame={liveFrame} liveStatus={liveStatus} retryLive={() => setLiveAttempt(value => value + 1)} scene={scene} count={count} faceCount={faceCount} faceBFromTop={faceBFromTop} view={view} setView={setView} onPower={() => updateScene({ ...scene, on: !scene.on })} />
+        <PolePreview expanded={previewExpanded} openPreview={openPreview} closePreview={closePreview} connected={!!device} liveFrame={liveFrame} liveStatus={liveStatus} retryLive={() => setLiveAttempt(value => value + 1)} scene={scene} count={count} faceCount={faceCount} faceBFromTop={faceBFromTop} view={view} setView={setView} onPower={() => updateScene({ ...scene, on: !scene.on })} />
         <SceneControls scene={scene} face={face} target={target} setTarget={setTarget} targetName={targetName} selectDesign={selectDesign} openPreview={openPreview} updateFace={updateFace} updateScene={updateScene}
           segmentEditor={<SegmentEditor scene={scene} total={mountTotal} target={target} setTarget={setTarget} updateScene={updateScene} limit={device?.maxSegments} />}
           scenesTab={scenesTab} invalid={!!layoutError} deviceEffects={device?.effects} apply={apply}
           save={() => openModal('save')} busy={busy} connected={!!device}
-          liveEdit={liveEdit} setLiveEdit={toggleLiveEdit} undo={() => travel('back')} redo={() => travel('forward')} canUndo={historySize.past > 0} canRedo={historySize.future > 0} />
+          undo={() => travel('back')} redo={() => travel('forward')} canUndo={historySize.past > 0} canRedo={historySize.future > 0} />
       </div>
     </main>
     <footer><div className="pole-symbol" /><strong>{device?.name || 'Poste 01'}</strong><span className="footer-divider" /><span>{mount.name} · {mountTotal} píxeles</span><span className="footer-divider" /><span>{faceCount === 1 ? 'Una cara' : `${count} por cara`}</span><span className="footer-right">Diseñado para brillar.</span></footer>

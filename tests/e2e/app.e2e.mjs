@@ -178,10 +178,8 @@ test('Current limit from the power-supply rating keeps the LED output', async ()
   assert.deepEqual(errors, []); await close();
 });
 
-test('Live editing sends changes without pressing Apply', async () => {
+test('Changes reach the pole without pressing Apply', async () => {
   const { page, pole, errors, close } = await open();
-  await page.getByRole('button', { name: 'En vivo', exact: true }).click();
-  await applied(page);
   const count = pole.posts.length;
   await page.getByRole('button', { name: 'Azul', exact: true }).click();
   await page.waitForTimeout(600);
