@@ -21,7 +21,7 @@ export default function SceneControls({ scene, face, target, setTarget, targetNa
   const colors = slots.length === 3 && face.colors.length < 3 ? [...face.colors, '#ffffff'] : face.colors;
   const paletteNote = !usesColors(face) && <div className="palette-note">
     <span style={{ background: gradient(previewStops(face)) }} />
-    <p><strong>{effect.spectrum && (face.palette || 'auto') === 'auto' ? 'Este diseño usa todo el arcoíris.' : `Los colores vienen de la paleta «${palettes.find(item => item.id === paletteKey(face))?.name}».`}</strong> Para elegir tus propios colores, cambia la paleta a «Tus dos colores».</p>
+    <p><strong>{effect.spectrum && (face.palette || 'auto') === 'auto' ? 'Este diseño usa todo el arcoíris.' : `Los colores vienen de la paleta «${palettes.find(item => item.id === paletteKey(face))?.name}».`}</strong> Para elegir tus propios colores, toca «Usar mis colores».</p>
     <button className="secondary-button" onClick={() => updateFace({ palette: 'colors' })}>Usar mis colores</button>
   </div>;
   return <section className="controls panel" aria-label="Editor de escenas">
@@ -55,7 +55,7 @@ export default function SceneControls({ scene, face, target, setTarget, targetNa
           <Slider label={effect.speedLabel || 'Velocidad'} Icon={Gauge} value={face.speed} disabled={effect.static} onChange={value => updateFace({ speed: value })} />
           {effect.intensityLabel !== null && <Slider label={effect.intensityLabel || 'Intensidad'} Icon={Sparkles} value={faceIntensity(face)} onChange={value => updateFace({ intensity: value })} />}
         </div>
-        {!effect.static && <label className="palette-field"><span><Palette size={15} />Paleta</span><select aria-label="Paleta" value={face.palette || 'auto'} onChange={event => updateFace({ palette: event.target.value })}>{palettes.map(item => <option key={item.id} value={item.id}>{item.id === 'auto' ? `Del diseño (${autoName})` : item.name}</option>)}</select></label>}
+        {!effect.static && <label className="palette-field"><span><Palette size={15} />Paleta</span><select aria-label="Paleta" value={face.palette || 'auto'} onChange={event => updateFace({ palette: event.target.value })}>{palettes.filter(item => !item.hidden || item.id === (face.palette || 'auto')).map(item => <option key={item.id} value={item.id}>{item.id === 'auto' ? `Del diseño (${autoName})` : item.name}</option>)}</select></label>}
         {!effect.static && <div className="direction-options" role="group" aria-label="Dirección del efecto">
           <button aria-pressed={!!face.reverse} onClick={() => updateFace({ reverse: !face.reverse })}>Invertir dirección</button>
           <button aria-pressed={!!face.mirror} onClick={() => updateFace({ mirror: !face.mirror })}>Espejo desde el centro</button>
