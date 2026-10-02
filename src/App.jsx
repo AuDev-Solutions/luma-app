@@ -94,7 +94,16 @@ export default function App() {
   useEffect(() => {
     liveFrame.current = null;
     if (!device) return;
-    return subscribeLivePreview(device.address, device.count, frame => { liveFrame.current = frame; }, setLiveStatus);
+    let checking = false;
+    // The pole was reconfigured elsewhere: read it again before any live edit sends the old layout.
+    const resized = () => {
+      if (checking) return; checking = true;
+      connectWled(device.address).then(connected => {
+        if (connected.count === device.count) return;
+        adopt(connected); notify(`El poste ahora tiene ${connected.count} LEDs. LUMA se ajustó.`);
+      }).catch(() => {}).finally(() => { checking = false; });
+    };
+    return subscribeLivePreview(device.address, device.count, frame => { liveFrame.current = frame; }, setLiveStatus, resized);
   }, [device?.address, device?.count, liveAttempt]);
 
   const targetIndex = scene.segments.findIndex(item => item.id === target);
@@ -263,7 +272,7 @@ export default function App() {
           undo={() => travel('back')} redo={() => travel('forward')} canUndo={historySize.past > 0} canRedo={historySize.future > 0} />
       </div>
     </main>
-    <footer><div className="pole-symbol" /><strong>{device?.name || 'Poste 01'}</strong><span className="footer-divider" /><span>{mount.name} · {mountTotal} píxeles</span><span className="footer-divider" /><span>{faceCount === 1 ? 'Una cara' : `${count} por cara`}</span><span className="footer-right">Diseñado para brillar.</span></footer>
+    <footer><div className="pole-symbol" /><strong>{device?.name || 'Poste 01'}</strong><span className="footer-divider" /><span>{mount.name} · {mountTotal} píxeles</span><span className="footer-divider" /><span>{faceCount === 1 ? (count === 100 ? 'Una cara' : 'Una tira') : `${count} por cara`}</span><span className="footer-right">Diseñado para brillar.</span></footer>
     {toast && <div role={toast.type === 'error' ? 'alert' : 'status'} className={`toast ${toast.type}`}><Check size={18} /><span>{toast.message}</span><button aria-label="Cerrar notificación" onClick={() => setToast(null)}>×</button></div>}
     {modal === 'connect' && <ConnectModal device={device} address={address} setAddress={setAddress} busy={busy} error={error} connect={connectTo} disconnect={disconnect} close={closeModal} />}
     {modal === 'save' && <SaveModal initialName={`${effectById(face.effect).name} ${savedScenes.length + poleScenes.length + 1}`} connected={!!device} busy={busy} error={error} save={save} close={closeModal} />}

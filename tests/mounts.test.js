@@ -10,7 +10,8 @@ const names = effects.map(effect => effect.wled);
 test('100 LEDs default to one face of 100; the saved choice wins only for the same total', () => {
   assert.equal(mountFor(100).id, 'face-100');
   assert.equal(mountFor(100, 'test-2x50').id, 'test-2x50');
-  assert.equal(mountFor(200, 'test-2x50').id, 'faces-200');
+  assert.equal(mountFor(200, 'test-2x50').id, 'strip-200');
+  assert.equal(mountFor(200, 'faces-200').id, 'faces-200');
   assert.equal(mountFor(300), undefined);
   assert.deepEqual(supportedTotals, [50, 100, 200, 400]);
 });

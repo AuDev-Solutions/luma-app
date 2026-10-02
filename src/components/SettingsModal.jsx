@@ -13,9 +13,9 @@ export default function SettingsModal({ device, poleConfig, mountId, selectMount
   // 85 % of the supply rating leaves headroom for the controller and supply tolerance.
   const proposedLimit = Math.round(Number(supplyAmps) * 1000 * 0.85);
 
-  if (confirmCount) return <Modal title={confirmCount === 200 ? 'Añadir la segunda cara' : 'Volver a una cara'} close={() => setConfirmCount(null)}>
+  if (confirmCount) return <Modal title={confirmCount === 200 ? 'Usar 200 LEDs' : 'Volver a 100 LEDs'} close={() => setConfirmCount(null)}>
     <p className="modal-copy">{confirmCount === 200
-      ? 'Hazlo solo cuando la segunda tira de 100 LEDs esté conectada en serie: la entrada de datos (DI) de la nueva tira va a la salida (DO) del último LED de la cara A, con tierra común y su propia alimentación.'
+      ? 'Hazlo cuando la segunda tira de 100 LEDs esté conectada en serie: la entrada de datos (DI) de la nueva tira va a la salida (DO) del último LED de la primera, con tierra común. Después elige si están en fila o como dos caras del poste.'
       : 'El poste dejará de enviar datos a los LEDs 101–200. Si siguen conectados, quedarán con su último color.'}</p>
     <p className="storage-note">Cambia la cantidad de la salida de LEDs del controlador de {device.count} a {confirmCount}. Se conservan el pin de datos, el tipo de LED, el orden de color y el límite de corriente; el cambio se aplica sin reiniciar. Revisa que la fuente soporte el poste completo.</p>
     {error && <p role="alert" className="form-error">{error}</p>}
@@ -27,8 +27,8 @@ export default function SettingsModal({ device, poleConfig, mountId, selectMount
     <div className="mount-options">{mounts.map(item => <button key={item.id} disabled={!!device && item.total !== device.count} className={mountId === item.id ? 'active' : ''} onClick={() => selectMount(item.id)}><span><strong>{item.name}</strong><small>{item.description}</small></span>{mountId === item.id && <Check size={20} />}</button>)}</div>
     {faceCount === 2 && <label className="check-row"><input type="checkbox" checked={faceBFromTop} onChange={event => setFaceBFromTop(event.target.checked)} /><span><strong>La cara B empieza arriba</strong><small>Cable continuo: la cara B se conecta al final de la cara A, en lo alto del poste.</small></span></label>}
     {device && <div className="led-count-actions">
-      {device.count === 100 && <button className="secondary-button full" disabled={busy} onClick={() => setConfirmCount(200)}>Ya conecté la segunda cara · usar 200 LEDs</button>}
-      {device.count === 200 && <button className="secondary-button full" disabled={busy} onClick={() => setConfirmCount(100)}>Volver a una sola cara · 100 LEDs</button>}
+      {device.count === 100 && <button className="secondary-button full" disabled={busy} onClick={() => setConfirmCount(200)}>Ya conecté 200 LEDs en serie · usar 200 LEDs</button>}
+      {device.count === 200 && <button className="secondary-button full" disabled={busy} onClick={() => setConfirmCount(100)}>Volver a 100 LEDs</button>}
       <button className="secondary-button full" disabled={busy} onClick={redetect}>{busy ? 'Leyendo el poste…' : 'Volver a detectar'}</button>
     </div>}
 

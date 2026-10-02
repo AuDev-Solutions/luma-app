@@ -5,7 +5,8 @@ export function decodeLiveFrame(buffer, count) {
   return bytes.slice(2);
 }
 
-export function subscribeLivePreview(address, count, onFrame, onStatus) {
+// A Peek frame of another size means the pole's LED count changed (e.g. from another phone): onResize.
+export function subscribeLivePreview(address, count, onFrame, onStatus, onResize) {
   let socket, stopped = false, lastFrame = 0, started = 0, status;
   const report = next => { if (status !== next) { status = next; onStatus(next); } };
   function open() {
@@ -17,6 +18,8 @@ export function subscribeLivePreview(address, count, onFrame, onStatus) {
     socket.onopen = () => { if (!stopped && socket === current) current.send(JSON.stringify({ lv: true })); };
     socket.onmessage = event => {
       if (stopped || socket !== current || !(event.data instanceof ArrayBuffer)) return;
+      const bytes = new Uint8Array(event.data);
+      if (bytes[0] === 76 && bytes[1] === 1 && bytes.length !== 2 + count * 3) { onFrame(null); onResize?.(); return; }
       const pixels = decodeLiveFrame(event.data, count);
       if (!pixels) { onFrame(null); report('unsupported'); return; }
       lastFrame = Date.now(); onFrame({ pixels, received: lastFrame }); report('live');

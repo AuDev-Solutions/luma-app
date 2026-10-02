@@ -70,7 +70,7 @@ function drawBackground(ctx, width, height, config, poles, radius) {
     ctx.fillStyle = '#39433b'; ctx.beginPath();
     for (let i = 0; i < config.count; i++) { const y = bottom - i * (bottom - top) / (config.count - 1); const radiusX = width < 500 ? 4 : radius; ctx.moveTo(x + radiusX, y); ctx.ellipse(x, y, radiusX, radius, 0, 0, Math.PI * 2); }
     ctx.fill(); ctx.fillStyle = '#afb9b1'; ctx.font = '12px "Segoe UI", sans-serif';
-    ctx.fillText(config.count === 50 && config.faceCount === 1 ? 'TIRA DE PRUEBA' : `CARA ${index ? 'B' : 'A'}`, x, height - 25);
+    ctx.fillText(config.count !== 100 && config.faceCount === 1 ? 'TIRA DE PRUEBA' : `CARA ${index ? 'B' : 'A'}`, x, height - 25);
   });
 }
 
