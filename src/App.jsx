@@ -174,7 +174,7 @@ export default function App() {
       }
       if (!clockStatus(connected.info).valid) await syncClock(connected.address, config).catch(() => {});
       notify(`Conectado a ${connected.name}.`);
-    } catch (failure) { if (attempt === connectAttempt.current && !silent) setError(failure.message); else if (silent) notify('No se encontró el poste guardado. Conéctalo desde «Conectar poste».', 'error'); }
+    } catch (failure) { if (attempt === connectAttempt.current && !silent) setError(failure.message); else if (silent) notify(failure instanceof TypeError || failure.name === 'TimeoutError' || failure.name === 'AbortError' ? 'No se encontró el poste guardado. Conéctalo desde «Conectar poste».' : failure.message, 'error'); }
     finally { if (attempt === connectAttempt.current) setBusy(false); }
   }
   useEffect(() => {
