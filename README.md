@@ -40,7 +40,7 @@ Luego abre `http://<ip-del-poste>/luma.htm` (en el Wi-Fi propio del poste: `http
 
 ## Estado del hardware (05-10-2026)
 
-- PCB con ESP32-S3, firmware WLED 17.0.0-devV5. Dos caras de 100 LEDs WS281x: **cara A en GPIO 17** (LED 1–100, driver RMT) y **cara B en GPIO 18** (LED 101–200, **driver I2S**, `"drv":1`). Con las dos salidas en RMT este firmware solo emite por la primera: la segunda salida debe ir en I2S.
+- PCB con ESP32-S3, firmware WLED 17.0.0-devV5. Dos caras de 100 LEDs WS281x: **cara A en GPIO 17** (LED 1–100, driver RMT) y **cara B en GPIO 3** (LED 101–200, **driver I2S**, `"drv":1`; el GPIO 18 de la PCB no da señal). Con las dos salidas en RMT este firmware solo emite por la primera: la segunda salida debe ir en I2S.
 - Funciona solo, sin red de casa: Wi-Fi propio «LUMA-Poste1», siempre activo, en http://4.3.2.1 (LUMA es la página principal). Solo 2,4 GHz: el ESP32 no se conecta a redes de 5 GHz.
 - Para instalar una versión nueva de LUMA desde el PC hay que alcanzar el poste: unirse a su red un momento o añadirle una red de 2,4 GHz y quitarla al terminar (si busca una red que no encuentra, su red propia se vuelve inestable).
 - Si un cambio de «LED & Hardware» no se aplica, reinicia cortando la corriente: el poste puede ignorar el reinicio por software y lee `cfg.json` al arrancar.
