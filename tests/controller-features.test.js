@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { saveScenePreset, deletePreset, listScenes, saveAutoMode, saveSchedule, scheduleTimers, readSchedule, setCurrentLimit, clockStatus, securityStatus, networkStatus, setStandaloneNetwork, AUTO_PRESET, OFF_PRESET } from '../src/lib/controller.js';
+import { saveScenePreset, deletePreset, listScenes, saveAutoMode, saveSchedule, scheduleTimers, readSchedule, setCurrentLimit, clockStatus, securityStatus, networkStatus, powerStatus, setStandaloneNetwork, AUTO_PRESET, OFF_PRESET } from '../src/lib/controller.js';
 import { setSettingsPin, PinRequiredError, request, presetPayload } from '../src/lib/wled.js';
 import { prepareScene, splitEqual } from '../src/lib/segments.js';
 import { initialScene, effects } from '../src/lib/scenes.js';
@@ -102,4 +102,14 @@ test('Standalone Wi-Fi: own network always on, home network forgotten, pole rest
   assert.deepEqual(pole.configs.at(-1), { ap: { ssid: 'LUMA-Poste1', psk: 'poste-seguro-1', behav: 2 }, nw: { ins: [{ ssid: 'Your_Network' }] }, rb: true });
   await setStandaloneNetwork(device.address, { name: 'Taller', password: '12345678', keepHome: true });
   assert.deepEqual(pole.configs.at(-1), { ap: { ssid: 'Taller', psk: '12345678', behav: 2 }, rb: true });
+});
+
+test('Current limit with one output per face: one shared limit for the supply', async () => {
+  const pole = fakePole();
+  pole.cfg.hw.led.ins = [{ start: 0, len: 100, pin: [17], type: 22, maxpwr: 0, ledma: 30, drv: 0 }, { start: 100, len: 100, pin: [18], type: 22, maxpwr: 0, ledma: 30, drv: 1 }];
+  await setCurrentLimit(device.address, 12750);
+  const sent = pole.configs.at(-1).hw.led;
+  assert.equal(sent.maxpwr, 12750);
+  assert.deepEqual(sent.ins.map(bus => [bus.pin[0], bus.maxpwr, bus.drv]), [[17, 0, 0], [18, 0, 1]], 'face B keeps the I2S driver');
+  assert.equal(powerStatus({ leds: { pwr: 900 } }, { hw: { led: sent } }).limit, 12750);
 });

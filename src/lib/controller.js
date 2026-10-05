@@ -136,15 +136,21 @@ export const setBootPreset = (address, id) => request(address, '/json/cfg', { de
 
 // Current limit (WLED ABL). 0 means unlimited; LUMA never guesses the power-supply rating.
 export function powerStatus(info, config) {
-  const bus = config?.hw?.led?.ins?.[0];
-  return { estimate: info?.leds?.pwr ?? 0, limit: bus?.maxpwr ?? info?.leds?.maxpwr ?? 0, perLed: bus?.ledma ?? 55 };
+  const outputs = config?.hw?.led?.ins ?? [];
+  const bus = outputs[0];
+  // Several outputs share the global limit; a single output carries its own.
+  const limit = outputs.length > 1 ? config?.hw?.led?.maxpwr ?? 0 : bus?.maxpwr || config?.hw?.led?.maxpwr || 0;
+  return { estimate: info?.leds?.pwr ?? 0, limit, perLed: bus?.ledma ?? 55 };
 }
 
 export async function setCurrentLimit(address, milliamps) {
   const config = await request(address, '/json/cfg');
   const outputs = config?.hw?.led?.ins;
-  if (!Array.isArray(outputs) || outputs.length !== 1) throw new Error('El controlador tiene varias salidas. Ajusta el límite en su configuración de LEDs.');
-  await request(address, '/json/cfg', { hw: { led: { maxpwr: milliamps, ins: [{ ...outputs[0], maxpwr: milliamps }] } } });
+  if (!Array.isArray(outputs) || !outputs.length) throw new Error('El controlador no tiene salidas de LEDs configuradas.');
+  // One output: its own limit. One output per face: a single limit for the whole supply and the
+  // per-output limits off (bus maxpwr 0 = WLED's global limiter). Each bus keeps its driver (face B on I2S).
+  const ins = outputs.length === 1 ? [{ ...outputs[0], maxpwr: milliamps }] : outputs.map(bus => ({ ...bus, maxpwr: 0 }));
+  await request(address, '/json/cfg', { hw: { led: { maxpwr: milliamps, ins } } });
 }
 
 // The pole's own Wi-Fi (WLED access point). In the street there is no router: phones join this network
