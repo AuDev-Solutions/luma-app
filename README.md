@@ -38,12 +38,14 @@ Luego abre `http://<ip-del-poste>/luma.htm` (en el Wi-Fi propio del poste: `http
 - **Mi montaje › Consumo**: corriente estimada y límite; el límite se calcula con el 85 % de los amperios de la fuente. **Seguridad**: estado del Wi-Fi propio y de las actualizaciones remotas, enlace a los ajustes avanzados y PIN de ajustes.
 - Recuerda el poste y se reconecta al abrir. Instalable como app (manifest + service worker en https/localhost).
 
-## Estado del hardware (lectura del 30-09-2026)
+## Estado del hardware (05-10-2026)
 
-- ESP32-S3, 100 LEDs en GPIO 17, un solo segmento.
+- PCB con ESP32-S3, firmware WLED 17.0.0-devV5. Dos caras de 100 LEDs WS281x: **cara A en GPIO 17** (LED 1–100, driver RMT) y **cara B en GPIO 18** (LED 101–200, **driver I2S**, `"drv":1`). Con las dos salidas en RMT este firmware solo emite por la primera: la segunda salida debe ir en I2S.
+- Funciona solo, sin red de casa: Wi-Fi propio «LUMA-Poste1», siempre activo, en http://4.3.2.1 (LUMA es la página principal). Solo 2,4 GHz: el ESP32 no se conecta a redes de 5 GHz.
+- Para instalar una versión nueva de LUMA desde el PC hay que alcanzar el poste: unirse a su red un momento o añadirle una red de 2,4 GHz y quitarla al terminar (si busca una red que no encuentra, su red propia se vuelve inestable).
+- Si un cambio de «LED & Hardware» no se aplica, reinicia cortando la corriente: el poste puede ignorar el reinicio por software y lee `cfg.json` al arrancar.
 - **Límite de corriente desactivado** (`maxpwr: 0`): configúralo en Mi montaje › Consumo con los amperios reales de la fuente.
-- Wi-Fi propio del poste con contraseña de 8 caracteres (probablemente la de fábrica) y actualizaciones remotas sin bloquear: cámbialos en los ajustes avanzados antes de instalarlo en la calle.
-- Recomendado en el montaje: adaptador de nivel 3,3 V → 5 V en la línea de datos (74AHCT125) con resistencia de ~330 Ω, condensador en la alimentación e inyección de corriente en tiras largas.
+- Sin hora tras un corte de luz (no tiene internet ni reloj con pila): pendiente añadir RTC DS3231 o fotocelda.
 
 ## Incluido
 
