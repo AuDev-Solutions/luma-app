@@ -179,11 +179,14 @@ function facePayload(face, id, device) {
 export async function setLedCount(address, total) {
   const config = await request(address, '/json/cfg');
   const outputs = config?.hw?.led?.ins;
-  if (!Array.isArray(outputs) || outputs.length !== 1 || !Array.isArray(outputs[0].pin) || !outputs[0].pin.length) {
-    throw new Error('El controlador tiene varias salidas o ninguna. Cambia la cantidad en la configuración de LEDs del controlador.');
+  if (!Array.isArray(outputs) || !outputs.length || outputs.length > 2 || outputs.some(bus => !Array.isArray(bus.pin) || !bus.pin.length)) {
+    throw new Error('El controlador tiene más de dos salidas o ninguna. Cambia la cantidad en la configuración de LEDs del controlador.');
   }
   if ((outputs[0].start ?? 0) !== 0) throw new Error('La salida de LEDs no empieza en 0. Revísala en la configuración de LEDs del controlador.');
-  await request(address, '/json/cfg', { hw: { led: { ins: [{ ...outputs[0], len: total }] } } });
+  // One face per data pin (e.g. GPIO 17 and 18): the total is split evenly, face B right after face A.
+  const share = total / outputs.length;
+  if (!Number.isInteger(share)) throw new Error(`No se pueden repartir ${total} LEDs entre ${outputs.length} salidas.`);
+  await request(address, '/json/cfg', { hw: { led: { ins: outputs.map((bus, index) => ({ ...bus, start: index * share, len: share })) } } });
   // Bus re-initialisation happens in WLED's next loop; poll until it reports the new count.
   for (let attempt = 0; attempt < 10; attempt++) {
     await new Promise(resolve => setTimeout(resolve, 400));

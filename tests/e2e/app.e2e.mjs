@@ -81,7 +81,7 @@ async function settled(pole) {
   for (let i = 0; i < 100; i++) {
     const posts = pole.posts.length;
     await new Promise(resolve => setTimeout(resolve, 150));
-    if (pole.presets[248] && pole.posts.length === posts && pole.uploads) return;
+    if (pole.presets[248] && pole.posts.length === posts && pole.cfgPosts.some(body => body.def?.ps === 248)) return;
   }
   throw new Error('the pole never kept the scene');
 }

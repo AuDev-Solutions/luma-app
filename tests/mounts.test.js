@@ -12,6 +12,7 @@ test('100 LEDs default to one face of 100; the saved choice wins only for the sa
   assert.equal(mountFor(100, 'test-2x50').id, 'test-2x50');
   assert.equal(mountFor(200, 'test-2x50').id, 'strip-200');
   assert.equal(mountFor(200, 'faces-200').id, 'faces-200');
+  assert.equal(mountFor(200, 'strip-200', 2).id, 'faces-200', 'two data pins mean two faces');
   assert.equal(mountFor(300), undefined);
   assert.deepEqual(supportedTotals, [50, 100, 200, 400]);
 });
@@ -40,7 +41,21 @@ test('Second face: only the LED count changes; pin, type, order and current limi
     await setLedCount('http://pole.test', 200);
     assert.deepEqual(posts, [{ hw: { led: { ins: [{ ...bus, len: 200 }] } } }]);
     bus.start = 0;
-    globalThis.fetch = async () => ({ ok: true, json: async () => ({ hw: { led: { ins: [bus, { ...bus, start: 100 }] } } }) });
-    await assert.rejects(setLedCount('http://pole.test', 200), /varias salidas/);
+    globalThis.fetch = async () => ({ ok: true, json: async () => ({ hw: { led: { ins: [bus, { ...bus, start: 100 }, { ...bus, start: 200 }] } } }) });
+    await assert.rejects(setLedCount('http://pole.test', 300), /más de dos salidas/);
+  } finally { globalThis.fetch = original; }
+});
+
+test('Two data pins (GPIO 17 and 18): changing the count splits it evenly between the faces', async () => {
+  const bus = { start: 0, len: 100, pin: [17], type: 22, maxpwr: 0, ledma: 55 };
+  const posts = []; let count = 200;
+  const original = globalThis.fetch;
+  globalThis.fetch = async (url, options) => {
+    if (options.method === 'POST') { const body = JSON.parse(options.body); posts.push(body); count = body.hw.led.ins.reduce((sum, item) => sum + item.len, 0); return { ok: true, json: async () => ({ success: true }) }; }
+    return { ok: true, json: async () => url.endsWith('/json/cfg') ? { hw: { led: { ins: [bus, { ...bus, start: 100, pin: [18] }] } } } : { leds: { count } } };
+  };
+  try {
+    await setLedCount('http://pole.test', 400);
+    assert.deepEqual(posts[0].hw.led.ins.map(item => [item.pin[0], item.start, item.len]), [[17, 0, 200], [18, 200, 200]]);
   } finally { globalThis.fetch = original; }
 });

@@ -11,7 +11,9 @@ export const mounts = [
 ];
 export const supportedTotals = [...new Set(mounts.map(item => item.total))].sort((a, b) => a - b);
 export const mountById = id => mounts.find(item => item.id === id);
-export function mountFor(total, preferred) {
+// One face per data pin: with two LED outputs, 200 LEDs are two faces of 100.
+export function mountFor(total, preferred, outputs = 1) {
+  if (outputs === 2 && total === 200 && preferred !== 'faces-200') return mountById('faces-200');
   const saved = mountById(preferred);
   return saved?.total === total ? saved : mounts.find(item => item.total === total);
 }

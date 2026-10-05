@@ -44,6 +44,7 @@ export default function SettingsModal({ device, poleConfig, mountId, selectMount
   return <Modal title="Mi montaje" close={close}>
     <p className="modal-copy">Los LED WS2811 no avisan cuántos hay conectados: la cantidad es la que está configurada en el controlador. {device ? `Este poste tiene ${device.count} LEDs configurados.` : 'Sin conexión, esta opción solo cambia el simulador.'}</p>
     <div className="mount-options">{mounts.map(item => <button key={item.id} disabled={!!device && item.total !== device.count} className={mountId === item.id ? 'active' : ''} onClick={() => selectMount(item.id)}><span><strong>{item.name}</strong><small>{item.description}</small></span>{mountId === item.id && <Check size={20} />}</button>)}</div>
+    {poleConfig?.hw?.led?.ins?.length > 1 && <p className="storage-note">Salidas de datos: {poleConfig.hw.led.ins.map(bus => `GPIO ${bus.pin[0]} (LED ${bus.start + 1}–${bus.start + bus.len})`).join(' · ')}</p>}
     {faceCount === 2 && <label className="check-row"><input type="checkbox" checked={faceBFromTop} onChange={event => setFaceBFromTop(event.target.checked)} /><span><strong>La cara B empieza arriba</strong><small>Cable continuo: la cara B se conecta al final de la cara A, en lo alto del poste.</small></span></label>}
     {device && <div className="led-count-actions">
       {device.count === 100 && <button className="secondary-button full" disabled={busy} onClick={() => setConfirmCount(200)}>Ya conecté 200 LEDs en serie · usar 200 LEDs</button>}

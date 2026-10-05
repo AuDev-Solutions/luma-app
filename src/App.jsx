@@ -165,6 +165,13 @@ export default function App() {
       writeSetting('luma-address', value); writeSetting('luma-autoconnect', 'true');
       // No battery-backed clock: give the pole this phone's time so schedules work offline.
       const config = await refreshPole(connected.address);
+      // Each face on its own data pin starts at the bottom: no continuous cable up to face B.
+      const outputs = config?.hw?.led?.ins?.length ?? 1;
+      const fit = mountFor(connected.count, mountId, outputs);
+      if (outputs === 2 && fit.faceCount === 2) {
+        if (fit.id !== mountFor(connected.count, mountId).id) selectMount(fit.id);
+        setFaceBFromTop(false); writeSetting('luma-face-b-top', 'false');
+      }
       if (!clockStatus(connected.info).valid) await syncClock(connected.address, config).catch(() => {});
       notify(`Conectado a ${connected.name}.`);
     } catch (failure) { if (attempt === connectAttempt.current && !silent) setError(failure.message); else if (silent) notify('No se encontró el poste guardado. Conéctalo desde «Conectar poste».', 'error'); }
