@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { saveScenePreset, deletePreset, listScenes, saveAutoMode, saveSchedule, scheduleTimers, readSchedule, setCurrentLimit, clockStatus, securityStatus, AUTO_PRESET, OFF_PRESET } from '../src/lib/controller.js';
+import { saveScenePreset, deletePreset, listScenes, saveAutoMode, saveSchedule, scheduleTimers, readSchedule, setCurrentLimit, clockStatus, securityStatus, networkStatus, setStandaloneNetwork, AUTO_PRESET, OFF_PRESET } from '../src/lib/controller.js';
 import { setSettingsPin, PinRequiredError, request, presetPayload } from '../src/lib/wled.js';
 import { prepareScene, splitEqual } from '../src/lib/segments.js';
 import { initialScene, effects } from '../src/lib/scenes.js';
@@ -90,4 +90,16 @@ test('Every theme builds a valid scene for every supported mount', () => {
     assert.equal(segmentError(scene, total), '', `${theme.id} @ ${total}`);
     assert.ok(validScene(scene), `${theme.id} @ ${total}`);
   }
+});
+
+test('Standalone Wi-Fi: own network always on, home network forgotten, pole restarts', async () => {
+  assert.deepEqual(networkStatus({ ap: { ssid: 'WLED-AP', behav: 1 }, nw: { ins: [{ ssid: 'Casa' }] } }), { apName: 'WLED-AP', alwaysOn: false, homeNetwork: 'Casa' });
+  assert.deepEqual(networkStatus({ ap: { ssid: 'LUMA-Poste1', behav: 2 }, nw: { ins: [{ ssid: 'Your_Network' }] } }), { apName: 'LUMA-Poste1', alwaysOn: true, homeNetwork: '' });
+  const pole = fakePole();
+  await assert.rejects(setStandaloneNetwork(device.address, { name: 'LUMA-Poste1', password: 'corta', keepHome: false }), /entre 8 y 63/);
+  assert.equal(pole.configs.length, 0);
+  await setStandaloneNetwork(device.address, { name: ' LUMA-Poste1 ', password: 'poste-seguro-1', keepHome: false });
+  assert.deepEqual(pole.configs.at(-1), { ap: { ssid: 'LUMA-Poste1', psk: 'poste-seguro-1', behav: 2 }, nw: { ins: [{ ssid: 'Your_Network' }] }, rb: true });
+  await setStandaloneNetwork(device.address, { name: 'Taller', password: '12345678', keepHome: true });
+  assert.deepEqual(pole.configs.at(-1), { ap: { ssid: 'Taller', psk: '12345678', behav: 2 }, rb: true });
 });

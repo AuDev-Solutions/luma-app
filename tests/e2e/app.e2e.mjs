@@ -19,7 +19,7 @@ const effects = ['Solid', 'Gradient', 'Running', 'Chase 2', 'Meteor', 'Fire 2012
 function createPole() {
   const pole = {
     state: { on: true, bri: 255, transition: 4, seg: [{ id: 0, start: 0, stop: 100, on: true, bri: 166, fx: 1, sx: 71, ix: 15, pal: 3, col: [[164, 255, 194], [32, 140, 255], [0, 0, 0]] }] },
-    presets: { 0: {} }, cfg: { hw: { led: { ins: [{ start: 0, len: 100, pin: [17], type: 22, maxpwr: 0, ledma: 30 }] } }, ap: { pskl: 0 }, ota: { lock: false }, if: { ntp: { en: false, tz: 0, offset: 0 } }, timers: { ins: [] }, def: { ps: 0 } },
+    presets: { 0: {} }, cfg: { hw: { led: { ins: [{ start: 0, len: 100, pin: [17], type: 22, maxpwr: 0, ledma: 30 }] } }, ap: { ssid: 'WLED-AP', pskl: 0, behav: 0 }, nw: { ins: [{ ssid: 'Casa' }] }, ota: { lock: false }, if: { ntp: { en: false, tz: 0, offset: 0 } }, timers: { ins: [] }, def: { ps: 0 } },
     posts: [], cfgPosts: [], uploads: 0,
   };
   pole.info = () => ({ name: 'Poste de prueba', time: '2026-9-30, 20:00:00', leds: { count: 100, maxseg: 16, pwr: 1200 } });
@@ -193,6 +193,23 @@ test('Changes reach the pole without pressing Apply', async () => {
   await page.waitForTimeout(600);
   assert.ok(pole.posts.length > count, 'change sent automatically');
   assert.deepEqual(pole.posts.at(-1).seg[0].col[0], [0, 0, 255]);
+  assert.deepEqual(errors, []); await close();
+});
+
+test('Standalone Wi-Fi: the pole gets its own network and the app explains how to rejoin it', async () => {
+  const { page, pole, errors, close } = await open({ mobile: true });
+  await page.getByRole('button', { name: 'Mi montaje' }).click();
+  await page.getByText('Además se conecta a la red «Casa». En la calle no la tendrá.').waitFor();
+  await page.getByRole('button', { name: 'Configurar para funcionar solo' }).click();
+  assert.equal(await page.getByRole('textbox', { name: 'Nombre de la red' }).inputValue(), 'LUMA-Poste1');
+  await page.getByRole('textbox', { name: 'Contraseña nueva' }).fill('poste-seguro-1');
+  await page.getByRole('button', { name: 'Continuar' }).click();
+  await page.getByRole('button', { name: 'Guardar y reiniciar el poste' }).click();
+  await page.getByText('El poste se está reiniciando').waitFor();
+  assert.deepEqual(pole.cfgPosts.at(-1), { ap: { ssid: 'LUMA-Poste1', psk: 'poste-seguro-1', behav: 2 }, nw: { ins: [{ ssid: 'Your_Network' }] }, rb: true });
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await page.getByRole('button', { name: 'Entendido' }).click();
+  assert.ok(await page.locator('.status-dot.off').count(), 'the app shows it is no longer connected');
   assert.deepEqual(errors, []); await close();
 });
 

@@ -1,17 +1,36 @@
 import { useState } from 'react';
-import { Check, Zap, ShieldCheck, ShieldAlert, ExternalLink } from 'lucide-react';
+import { Check, Zap, ShieldCheck, ShieldAlert, ExternalLink, Wifi } from 'lucide-react';
 import Modal from './Modal.jsx';
 import { mounts } from '../lib/mounts.js';
-import { powerStatus, securityStatus } from '../lib/controller.js';
+import { powerStatus, securityStatus, networkStatus, standaloneNetworkError } from '../lib/controller.js';
 
 // Mount, LED count, current limit and security for the connected pole.
-export default function SettingsModal({ device, poleConfig, mountId, selectMount, faceCount, faceBFromTop, setFaceBFromTop, busy, error, redetect, changeLedCount, changeCurrentLimit, pin, setPin, close }) {
+export default function SettingsModal({ device, poleConfig, mountId, selectMount, faceCount, faceBFromTop, setFaceBFromTop, busy, error, redetect, changeLedCount, changeCurrentLimit, changeNetwork, pin, setPin, close }) {
   const [confirmCount, setConfirmCount] = useState(null);
   const power = device && powerStatus(device.info, poleConfig);
   const security = poleConfig && securityStatus(poleConfig);
   const [supplyAmps, setSupplyAmps] = useState('');
   // 85 % of the supply rating leaves headroom for the controller and supply tolerance.
   const proposedLimit = Math.round(Number(supplyAmps) * 1000 * 0.85);
+  const network = poleConfig && networkStatus(poleConfig);
+  const [wifi, setWifi] = useState(null); // form → confirm → done
+  const wifiError = wifi && standaloneNetworkError(wifi);
+
+  if (wifi?.step === 'done') return <Modal title="El poste se está reiniciando" close={close}>
+    <p className="modal-copy">En unos segundos el poste emitirá la red <strong>«{wifi.name}»</strong>.</p>
+    <ol className="steps-list">
+      <li>En los ajustes de Wi-Fi del celular, conéctate a <strong>{wifi.name}</strong> con la contraseña que acabas de poner.</li>
+      <li>Si el celular avisa «sin internet», elige <strong>mantener la conexión</strong>.</li>
+      <li>Abre <strong>http://4.3.2.1</strong>: LUMA se abre y se conecta sola.</li>
+    </ol>
+    <button className="primary-button full" onClick={close}>Entendido<Check size={18} /></button>
+  </Modal>;
+  if (wifi?.step === 'confirm') return <Modal title="Cambiar el Wi-Fi del poste" close={() => setWifi({ ...wifi, step: 'form' })}>
+    <p className="modal-copy">El poste se reiniciará y emitirá su propia red <strong>«{wifi.name}»</strong>{wifi.keepHome ? ', además de seguir conectado a la red de casa' : ' sin buscar ninguna otra red'}. Esta app se desconectará hasta que el celular se una a esa red.</p>
+    <p className="storage-note">Apunta la contraseña: sin ella, la única forma de recuperar el poste es reinstalar su programa por cable.</p>
+    {error && <p role="alert" className="form-error">{error}</p>}
+    <button className="primary-button full" disabled={busy} onClick={async () => { if (await changeNetwork(wifi)) setWifi({ ...wifi, step: 'done' }); }}>{busy ? 'Guardando…' : 'Guardar y reiniciar el poste'}</button>
+  </Modal>;
 
   if (confirmCount) return <Modal title={confirmCount === 200 ? 'Usar 200 LEDs' : 'Volver a 100 LEDs'} close={() => setConfirmCount(null)}>
     <p className="modal-copy">{confirmCount === 200
@@ -41,6 +60,23 @@ export default function SettingsModal({ device, poleConfig, mountId, selectMount
         <button className="secondary-button" disabled={busy || proposedLimit < 250}>Limitar a {proposedLimit >= 250 ? `${(proposedLimit / 1000).toLocaleString('es')} A` : '…'}</button>
       </form>
       <p className="storage-note">Se deja un 15 % de margen. Si hace falta, el controlador baja el brillo en lugar de sobrecargar la fuente.</p>
+    </section>}
+
+    {device && network && <section className="settings-section" aria-labelledby="wifi-title">
+      <h3 id="wifi-title"><Wifi size={16} />Wi-Fi del poste</h3>
+      <ul className="check-list">
+        <li className={network.alwaysOn ? 'ok' : 'warn'}>{network.alwaysOn ? `Su red propia «${network.apName}» está siempre encendida.` : `Su red propia «${network.apName}» solo aparece cuando no encuentra otra red.`}</li>
+        <li className={network.homeNetwork ? 'warn' : 'ok'}>{network.homeNetwork ? `Además se conecta a la red «${network.homeNetwork}». En la calle no la tendrá.` : 'Funciona solo: no depende de ninguna otra red.'}</li>
+      </ul>
+      <p className="segment-help">En la calle no hay router: el celular se conecta a la red del poste y abre http://4.3.2.1.</p>
+      {!wifi ? <button className="secondary-button full" disabled={busy} onClick={() => setWifi({ step: 'form', name: network.apName.startsWith('WLED') ? 'LUMA-Poste1' : network.apName, password: '', keepHome: false })}>Configurar para funcionar solo</button>
+        : <form className="wifi-form" onSubmit={event => { event.preventDefault(); if (!wifiError) setWifi({ ...wifi, step: 'confirm' }); }}>
+          <label className="text-field">Nombre de la red<input value={wifi.name} maxLength={32} onChange={event => setWifi({ ...wifi, name: event.target.value })} autoCapitalize="none" autoCorrect="off" spellCheck="false" /></label>
+          <label className="text-field">Contraseña nueva<input type="text" value={wifi.password} maxLength={63} onChange={event => setWifi({ ...wifi, password: event.target.value })} placeholder="Mínimo 8 caracteres" autoCapitalize="none" autoCorrect="off" spellCheck="false" autoComplete="off" /></label>
+          <label className="check-row compact"><input type="checkbox" checked={wifi.keepHome} onChange={event => setWifi({ ...wifi, keepHome: event.target.checked })} /><span><strong>Seguir conectado también a la red de casa</strong><small>Solo para pruebas en el taller.</small></span></label>
+          {wifi.password && wifiError && <p className="form-error">{wifiError}</p>}
+          <div className="segment-actions"><button className="primary-button" disabled={!!wifiError}>Continuar</button><button type="button" className="secondary-button" onClick={() => setWifi(null)}>Cancelar</button></div>
+        </form>}
     </section>}
 
     {device && <section className="settings-section" aria-labelledby="security-title">

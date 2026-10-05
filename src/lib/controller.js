@@ -147,6 +147,30 @@ export async function setCurrentLimit(address, milliamps) {
   await request(address, '/json/cfg', { hw: { led: { maxpwr: milliamps, ins: [{ ...outputs[0], maxpwr: milliamps }] } } });
 }
 
+// The pole's own Wi-Fi (WLED access point). In the street there is no router: phones join this network
+// and open http://4.3.2.1. «Your_Network» is WLED's "no home network" value (const.h DEFAULT_CLIENT_SSID),
+// so the pole stops looking for one; behav 2 keeps its own network always on (const.h AP_BEHAVIOR_ALWAYS).
+const NO_HOME_NETWORK = 'Your_Network';
+export function networkStatus(config) {
+  const home = config?.nw?.ins?.[0]?.ssid || '';
+  return { apName: config?.ap?.ssid || '', alwaysOn: config?.ap?.behav === 2, homeNetwork: home && home !== NO_HOME_NETWORK ? home : '' };
+}
+export function standaloneNetworkError({ name, password }) {
+  if (!name.trim() || name.trim().length > 32) return 'El nombre de la red debe tener entre 1 y 32 caracteres.';
+  if (password.length < 8 || password.length > 63) return 'La contraseña debe tener entre 8 y 63 caracteres.';
+  return '';
+}
+// The pole restarts to apply it («rb», cfg.cpp); every phone must then join the new network.
+export async function setStandaloneNetwork(address, { name, password, keepHome }) {
+  const error = standaloneNetworkError({ name, password });
+  if (error) throw new Error(error);
+  await request(address, '/json/cfg', {
+    ap: { ssid: name.trim(), psk: password, behav: 2 },
+    ...(keepHome ? {} : { nw: { ins: [{ ssid: NO_HOME_NETWORK }] } }),
+    rb: true,
+  });
+}
+
 export function securityStatus(config) {
   return { apPassword: (config?.ap?.pskl ?? 0) > 0, apDefault: (config?.ap?.pskl ?? 0) === 8, otaLocked: !!config?.ota?.lock };
 }

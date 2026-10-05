@@ -68,3 +68,4 @@
 @media(max-width:400px){.app-shell{padding-left:14px;padding-right:14px}.brand{letter-spacing:3px;gap:8px}.header-actions{gap:6px}.settings-button,.connect-button{padding:0 9px}}
 @media(max-width:340px){.connect-button span{display:none}}
 .status-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}.status-dot.on{background:#3ddc6f;box-shadow:0 0 8px #3ddc6f99}.status-dot.off{background:#ff4d4d;box-shadow:0 0 8px #ff4d4d80}
+.steps-list{margin:4px 0 20px 20px;display:grid;gap:10px;font-size:13px;line-height:1.5;color:#c9d2d3}.wifi-form{display:grid;gap:12px;margin-top:8px}

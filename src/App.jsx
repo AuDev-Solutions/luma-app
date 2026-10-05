@@ -10,14 +10,15 @@ import SettingsModal from './components/SettingsModal.jsx';
 import { prepareScene, segmentError } from './lib/segments.js';
 import { effectById, initialScene, readSavedScenes, presetFace } from './lib/scenes.js';
 import { applyWled, connectWled, sceneFromDevice, setLedCount, sendScene, presetPayload, request, setSettingsPin, PinRequiredError } from './lib/wled.js';
-import { readPresets, listScenes, rememberAppliedScene, APPLIED_PRESET, saveScenePreset, deletePreset, applyPreset, saveAutoMode, syncClock, clockStatus, saveSchedule, clearSchedule, setBootPreset, setCurrentLimit, localOffsetSeconds } from './lib/controller.js';
+import { readPresets, listScenes, rememberAppliedScene, APPLIED_PRESET, saveScenePreset, deletePreset, applyPreset, saveAutoMode, syncClock, clockStatus, saveSchedule, clearSchedule, setBootPreset, setCurrentLimit, setStandaloneNetwork, localOffsetSeconds } from './lib/controller.js';
 import { subscribeLivePreview } from './lib/live-preview.js';
 import { mountById, mountFor, supportedTotals } from './lib/mounts.js';
 
 const readSetting = (key, fallback) => { try { return localStorage.getItem(key) ?? fallback; } catch { return fallback; } };
 const writeSetting = (key, value) => { try { localStorage.setItem(key, value); } catch { /* per-browser convenience only */ } };
-// Served from the pole itself (http://<pole>/luma.htm): the pole is this page's own origin.
-const servedFromPole = () => /luma/i.test(location.pathname) && location.protocol === 'http:';
+// Served from the pole itself (http://4.3.2.1/ or http://<pole>/luma.htm): the pole is this page's own origin.
+// The pole serves on port 80; the dev and preview servers always use another port.
+const servedFromPole = () => location.protocol === 'http:' && !location.port && (/luma/i.test(location.pathname) || location.pathname === '/' || /index\.htm/i.test(location.pathname));
 const HISTORY_LIMIT = 60;
 
 export default function App() {
@@ -181,6 +182,14 @@ export default function App() {
   const redetect = () => run(async () => { const connected = await connectWled(device.address); adopt(connected); await refreshPole(connected.address); }, 'Lectura del poste actualizada.');
   const changeLedCount = total => run(async () => { await setLedCount(device.address, total); adopt(await connectWled(device.address)); }, `El poste ahora controla ${total} LEDs en el mismo pin de datos.`);
   const changeCurrentLimit = milliamps => run(async () => { await setCurrentLimit(device.address, milliamps); adopt(await connectWled(device.address)); await refreshPole(device.address); }, `Límite de corriente: ${(milliamps / 1000).toLocaleString('es')} A.`);
+  // After this the pole restarts on its own network: this app loses it until the phone joins that network.
+  async function changeNetwork(settings) {
+    const done = await run(() => setStandaloneNetwork(device.address, settings));
+    if (!done) return false;
+    if (!settings.keepHome) { setAddress('4.3.2.1'); writeSetting('luma-address', '4.3.2.1'); }
+    setDevice(null); setPoleScenes([]); setPoleConfig(null);
+    return true;
+  }
   function setPin(value) { setPinState(value); setSettingsPin(value); }
 
   // ——— Editing
@@ -276,6 +285,6 @@ export default function App() {
     {toast && <div role={toast.type === 'error' ? 'alert' : 'status'} className={`toast ${toast.type}`}><Check size={18} /><span>{toast.message}</span><button aria-label="Cerrar notificación" onClick={() => setToast(null)}>×</button></div>}
     {modal === 'connect' && <ConnectModal device={device} address={address} setAddress={setAddress} busy={busy} error={error} connect={connectTo} disconnect={disconnect} close={closeModal} />}
     {modal === 'save' && <SaveModal initialName={`${effectById(face.effect).name} ${savedScenes.length + poleScenes.length + 1}`} connected={!!device} busy={busy} error={error} save={save} close={closeModal} />}
-    {modal === 'settings' && <SettingsModal device={device} poleConfig={poleConfig} mountId={mountId} selectMount={selectMount} faceCount={faceCount} faceBFromTop={faceBFromTop} setFaceBFromTop={value => { setFaceBFromTop(value); writeSetting('luma-face-b-top', String(value)); }} busy={busy} error={error} redetect={redetect} changeLedCount={changeLedCount} changeCurrentLimit={changeCurrentLimit} pin={pin} setPin={setPin} close={closeModal} />}
+    {modal === 'settings' && <SettingsModal device={device} poleConfig={poleConfig} mountId={mountId} selectMount={selectMount} faceCount={faceCount} faceBFromTop={faceBFromTop} setFaceBFromTop={value => { setFaceBFromTop(value); writeSetting('luma-face-b-top', String(value)); }} busy={busy} error={error} redetect={redetect} changeLedCount={changeLedCount} changeCurrentLimit={changeCurrentLimit} changeNetwork={changeNetwork} pin={pin} setPin={setPin} close={closeModal} />}
   </div>;
 }
