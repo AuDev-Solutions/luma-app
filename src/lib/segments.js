@@ -16,8 +16,18 @@ export function faceSegments(total, faceCount = 2) {
 export function prepareScene(scene, total, faceCount = 2) {
   if (scene.segments) return { transition: 0.4, ...scene };
   const same = scene.faces.every(face => JSON.stringify(face) === JSON.stringify(scene.faces[0]));
-  const segments = same ? defaultSegments(total) : faceSegments(total, faceCount);
+  // Two faces always get a segment each, so one design plays the same sequence on both sides.
+  const segments = same && faceCount !== 2 ? defaultSegments(total) : faceSegments(total, faceCount);
   return { ...scene, transition: scene.transition ?? 0.4, total, segments, faces: segments.map((_, i) => structuredClone(scene.faces[i] || scene.faces[0])) };
+}
+
+// A design for the whole pole on a two-face mount runs once per face (same sequence on both sides)
+// instead of flowing from face A into face B as one 200-LED strip.
+export function perFace(scene, faceCount) {
+  if (faceCount !== 2 || scene.segments?.length !== 1) return scene;
+  const [only] = scene.segments;
+  if (only.start !== 0 || only.stop !== scene.total) return scene;
+  return { ...scene, segments: faceSegments(scene.total, 2), faces: [structuredClone(scene.faces[0]), structuredClone(scene.faces[0])] };
 }
 
 // Distinct, saturated colours read clearly at a distance; black secondary leaves room for movement.

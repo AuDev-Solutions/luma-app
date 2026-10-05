@@ -7,7 +7,7 @@ import ScenesTab from './components/ScenesTab.jsx';
 import ConnectModal from './components/ConnectModal.jsx';
 import SaveModal from './components/SaveModal.jsx';
 import SettingsModal from './components/SettingsModal.jsx';
-import { prepareScene, segmentError } from './lib/segments.js';
+import { prepareScene, perFace, segmentError } from './lib/segments.js';
 import { effectById, initialScene, readSavedScenes, presetFace } from './lib/scenes.js';
 import { applyWled, connectWled, sceneFromDevice, setLedCount, sendScene, presetPayload, request, setSettingsPin, PinRequiredError } from './lib/wled.js';
 import { readPresets, listScenes, rememberAppliedScene, APPLIED_PRESET, saveScenePreset, deletePreset, applyPreset, saveAutoMode, syncClock, clockStatus, saveSchedule, clearSchedule, setBootPreset, setCurrentLimit, setStandaloneNetwork, localOffsetSeconds } from './lib/controller.js';
@@ -112,7 +112,12 @@ export default function App() {
   // With a single segment there is nothing to choose: hide segment wording entirely.
   const targetName = scene.segments.length === 1 ? null : target === 'all' || targetIndex < 0 ? 'Todos los segmentos' : scene.segments[targetIndex].name || `Segmento ${target + 1}`;
   const layoutError = segmentError(scene, mountTotal, device?.maxSegments);
-  function updateScene(next) { setScene(next); }
+  function updateScene(next) {
+    const before = sceneRef.current.segments.length;
+    setScene(current => perFace(typeof next === 'function' ? next(current) : next, faceCount));
+    // The pole was just split into its two faces: keep editing both together.
+    if (before === 1 && sceneRef.current.segments.length === 2 && faceCount === 2) setTarget('all');
+  }
   useEffect(() => () => clearTimeout(timerRef.current), []);
   const notify = (message, type = 'success') => { clearTimeout(timerRef.current); setToast({ message, type }); if (type !== 'error') timerRef.current = setTimeout(() => setToast(null), 6000); };
   const openModal = name => { setError(''); setModal(name); };
@@ -131,8 +136,8 @@ export default function App() {
 
   function selectMount(id, nextScene) {
     const selected = mountById(id);
-    const next = nextScene || prepareScene({ ...sceneRef.current, segments: undefined }, selected.total, selected.faceCount);
-    setMountId(id); writeSetting('luma-mount', id); setTarget(next.segments[0].id); setView(selected.faceCount === 1 ? 'a' : 'both'); setScene(next);
+    const next = perFace(nextScene || prepareScene({ ...sceneRef.current, segments: undefined }, selected.total, selected.faceCount), selected.faceCount);
+    setMountId(id); writeSetting('luma-mount', id); setTarget(selected.faceCount === 2 && next.segments.length > 1 ? 'all' : next.segments[0].id); setView(selected.faceCount === 1 ? 'a' : 'both'); setScene(next);
   }
   function loadIntoEditor(saved, message) {
     const total = saved.total || mountTotal;
@@ -152,9 +157,10 @@ export default function App() {
     const detected = mountFor(connected.count, mountId);
     if (!detected) throw new Error(`El poste tiene ${connected.count} LEDs configurados y LUMA admite ${supportedTotals.join(', ')}. Corrígelo en ${connected.address}/settings/leds: el total es el inicio más la longitud de la última salida (dos caras: inicio 0 y 100, longitud 100 cada una).`);
     setDevice(connected); lastLayout.current = null;
-    selectMount(detected.id, sceneFromDevice(connected) || prepareScene(initialScene, connected.count, detected.faceCount));
-    // What the pole already shows is not sent back to it.
-    syncedScene.current = sceneRef.current;
+    const fromPole = sceneFromDevice(connected);
+    selectMount(detected.id, fromPole || prepareScene(initialScene, connected.count, detected.faceCount));
+    // What the pole already shows is not sent back to it, unless LUMA just split it into its two faces.
+    syncedScene.current = fromPole && fromPole.segments.length !== sceneRef.current.segments.length ? null : sceneRef.current;
   }
   async function connectTo(value, { silent = false } = {}) {
     setBusy(true); setError(''); const attempt = ++connectAttempt.current;
@@ -204,7 +210,10 @@ export default function App() {
   // Editing every part at once changes the movement, not the colours each part was given.
   function selectDesign(effect) {
     const { colors, ...design } = presetFace(effect);
-    updateFace(target === 'all' && scene.segments.length > 1 && !effect.spectrum ? design : { ...design, colors });
+    // Only parts that were given their own colours keep them (a pole split in 4); two faces with the same
+    // design take the new design's colours.
+    const ownColours = new Set(scene.faces.map(face => face.colors.join())).size > 1;
+    updateFace(target === 'all' && ownColours && !effect.spectrum ? design : { ...design, colors });
   }
 
   // ——— Sending to the pole

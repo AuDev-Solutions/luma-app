@@ -58,7 +58,7 @@ test('Apply confirms arbitrary ranges, deletion and transition; rejects a contro
 });
 
 test('One design means one segment; segmenting carves exact ranges without overlaps or gaps', () => {
-  const whole = prepareScene(initialScene, 100);
+  const whole = prepareScene(initialScene, 100, 1);
   assert.deepEqual(whole.segments, [{ id: 0, name: 'Todo el poste', start: 0, stop: 100 }]);
   assert.equal(whole.faces.length, 1);
   const legacy = prepareScene({ on: true, faces: [initialScene.faces[0], { ...initialScene.faces[0], effect: 'solid' }] }, 100);
@@ -111,4 +111,14 @@ test('Pole split in 4 equal parts: one colour each over black, sharing one desig
   assert.equal(names[payload.seg[0].fx], 'Chase 2');
   assert.equal(payload.seg[0].pal, 0, 'pure red and white bands, no gradient');
   assert.deepEqual(payload.seg[0].col.slice(0, 2), [[255, 10, 10], [255, 255, 255]]);
+});
+
+test('Two faces: one design runs once per face, not as one 200-LED strip', async () => {
+  const { perFace } = await import('../src/lib/segments.js');
+  const whole = prepareScene(initialScene, 200, 2);
+  assert.deepEqual(whole.segments.map(item => [item.name, item.start, item.stop]), [['Cara A', 0, 100], ['Cara B', 100, 200]]);
+  assert.deepEqual(whole.faces[0], whole.faces[1]);
+  const fromPole = { ...prepareScene(initialScene, 100, 1), total: 200, segments: [{ id: 0, name: 'Todo el poste', start: 0, stop: 200 }] };
+  assert.deepEqual(perFace(fromPole, 2).segments.map(item => [item.start, item.stop]), [[0, 100], [100, 200]]);
+  assert.equal(perFace(fromPole, 1), fromPole, 'one face keeps a single segment');
 });
