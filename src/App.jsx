@@ -150,7 +150,7 @@ export default function App() {
   }
   function adopt(connected) {
     const detected = mountFor(connected.count, mountId);
-    if (!detected) throw new Error(`El controlador tiene ${connected.count} píxeles configurados. Este proyecto admite ${supportedTotals.join(', ')}.`);
+    if (!detected) throw new Error(`El poste tiene ${connected.count} LEDs configurados y LUMA admite ${supportedTotals.join(', ')}. Corrígelo en ${connected.address}/settings/leds: el total es el inicio más la longitud de la última salida (dos caras: inicio 0 y 100, longitud 100 cada una).`);
     setDevice(connected); lastLayout.current = null;
     selectMount(detected.id, sceneFromDevice(connected) || prepareScene(initialScene, connected.count, detected.faceCount));
     // What the pole already shows is not sent back to it.
