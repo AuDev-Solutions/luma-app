@@ -273,7 +273,7 @@ export default function App() {
   }
 
   const scenesTab = <ScenesTab connected={!!device} busy={busy} device={device} poleScenes={poleScenes} poleConfig={poleConfig}
-    loadTheme={theme => loadIntoEditor(theme.build(mountTotal), `Tema «${theme.name}» cargado. Pulsa Aplicar para verlo en el poste.`)}
+    loadTheme={theme => loadIntoEditor(theme.build(mountTotal, { faceCount, faceBFromTop }), `Tema «${theme.name}» ${device ? 'en el poste' : 'cargado en la vista previa'}.`)}
     savedScenes={savedScenes} loadScene={saved => loadIntoEditor(saved, 'Escena cargada en la vista previa.')} removeScene={removeScene}
     applyPoleScene={item => run(async () => { await applyPreset(device.address, item.id); lastLayout.current = null; syncedScene.current = sceneRef.current; }, `«${item.name}» en el poste.`)}
     editPoleScene={item => loadIntoEditor(item.scene, `«${item.name}» cargada en el editor.`)}

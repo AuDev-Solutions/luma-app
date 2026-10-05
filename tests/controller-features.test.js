@@ -89,7 +89,20 @@ test('Every theme builds a valid scene for every supported mount', () => {
     const scene = theme.build(total);
     assert.equal(segmentError(scene, total), '', `${theme.id} @ ${total}`);
     assert.ok(validScene(scene), `${theme.id} @ ${total}`);
+    if (total >= 100) for (const faceBFromTop of [false, true]) {
+      const faces = theme.build(total, { faceCount: 2, faceBFromTop });
+      assert.equal(segmentError(faces, total), '', `${theme.id} @ ${total} two faces`);
+      assert.ok(validScene(faces), `${theme.id} @ ${total} two faces`);
+    }
   }
+});
+
+test('Two faces: the Colombian flag shows complete on each side', () => {
+  const flag = themes.find(theme => theme.id === 'tricolor');
+  const layout = scene => scene.segments.map((segment, i) => [segment.start, segment.stop, scene.faces[i].colors[0]]);
+  assert.deepEqual(layout(flag.build(200, { faceCount: 2 })), [[0, 25, '#ce1126'], [25, 50, '#0038a8'], [50, 100, '#ffd400'], [100, 125, '#ce1126'], [125, 150, '#0038a8'], [150, 200, '#ffd400']]);
+  // Face B wired from the top: its bands run downwards so yellow is still at the top from the ground.
+  assert.deepEqual(layout(flag.build(200, { faceCount: 2, faceBFromTop: true })).slice(3), [[100, 150, '#ffd400'], [150, 175, '#0038a8'], [175, 200, '#ce1126']]);
 });
 
 test('Standalone Wi-Fi: own network always on, home network forgotten, pole restarts', async () => {
