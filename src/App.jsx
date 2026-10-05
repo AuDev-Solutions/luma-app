@@ -7,7 +7,7 @@ import ScenesTab from './components/ScenesTab.jsx';
 import ConnectModal from './components/ConnectModal.jsx';
 import SaveModal from './components/SaveModal.jsx';
 import SettingsModal from './components/SettingsModal.jsx';
-import { prepareScene, perFace, segmentError } from './lib/segments.js';
+import { prepareScene, toPole, fromPole, segmentError } from './lib/segments.js';
 import { effectById, initialScene, readSavedScenes, presetFace } from './lib/scenes.js';
 import { applyWled, connectWled, sceneFromDevice, setLedCount, sendScene, presetPayload, request, setSettingsPin, PinRequiredError } from './lib/wled.js';
 import { readPresets, listScenes, rememberAppliedScene, APPLIED_PRESET, saveScenePreset, deletePreset, applyPreset, saveAutoMode, syncClock, clockStatus, saveSchedule, clearSchedule, setBootPreset, setCurrentLimit, setStandaloneNetwork, localOffsetSeconds } from './lib/controller.js';
@@ -25,8 +25,10 @@ export default function App() {
   const [mountId, setMountId] = useState(() => mountById(readSetting('luma-mount', 'face-100')) ? readSetting('luma-mount', 'face-100') : 'face-100');
   const mount = mountById(mountId);
   const { count, faceCount, total: mountTotal } = mount;
+  // Two faces always show the same thing: the editor works on one face and LUMA copies it to the other.
+  const editorTotal = faceCount === 2 ? count : mountTotal;
   const [faceBFromTop, setFaceBFromTop] = useState(() => readSetting('luma-face-b-top', 'true') === 'true');
-  const [scene, setSceneState] = useState(() => prepareScene(initialScene, mount.total, mount.faceCount));
+  const [scene, setSceneState] = useState(() => prepareScene(initialScene, mount.faceCount === 2 ? mount.count : mount.total, 1));
   // Like WLED, edits go to the selected segment; «Todos» is an explicit choice.
   const [target, setTarget] = useState(0);
   const [view, setView] = useState('both');
@@ -111,13 +113,11 @@ export default function App() {
   const face = scene.faces[Math.max(0, targetIndex)];
   // With a single segment there is nothing to choose: hide segment wording entirely.
   const targetName = scene.segments.length === 1 ? null : target === 'all' || targetIndex < 0 ? 'Todos los segmentos' : scene.segments[targetIndex].name || `Segmento ${target + 1}`;
-  const layoutError = segmentError(scene, mountTotal, device?.maxSegments);
-  function updateScene(next) {
-    const before = sceneRef.current.segments.length;
-    setScene(current => perFace(typeof next === 'function' ? next(current) : next, faceCount));
-    // The pole was just split into its two faces: keep editing both together.
-    if (before === 1 && sceneRef.current.segments.length === 2 && faceCount === 2) setTarget('all');
-  }
+  const segmentLimit = device?.maxSegments && faceCount === 2 ? Math.floor(device.maxSegments / 2) : device?.maxSegments;
+  const layoutError = segmentError(scene, editorTotal, segmentLimit);
+  const forPole = editing => toPole(editing, faceCount, faceBFromTop);
+  const poleScene = forPole(scene);
+  function updateScene(next) { setScene(next); }
   useEffect(() => () => clearTimeout(timerRef.current), []);
   const notify = (message, type = 'success') => { clearTimeout(timerRef.current); setToast({ message, type }); if (type !== 'error') timerRef.current = setTimeout(() => setToast(null), 6000); };
   const openModal = name => { setError(''); setModal(name); };
@@ -136,14 +136,16 @@ export default function App() {
 
   function selectMount(id, nextScene) {
     const selected = mountById(id);
-    const next = perFace(nextScene || prepareScene({ ...sceneRef.current, segments: undefined }, selected.total, selected.faceCount), selected.faceCount);
-    setMountId(id); writeSetting('luma-mount', id); setTarget(selected.faceCount === 2 && next.segments.length > 1 ? 'all' : next.segments[0].id); setView(selected.faceCount === 1 ? 'a' : 'both'); setScene(next);
+    const next = nextScene || prepareScene({ ...sceneRef.current, segments: undefined }, selected.faceCount === 2 ? selected.count : selected.total, 1);
+    setMountId(id); writeSetting('luma-mount', id); setTarget(next.segments[0].id); setView(selected.faceCount === 1 ? 'a' : 'both'); setScene(next);
   }
   function loadIntoEditor(saved, message) {
-    const total = saved.total || mountTotal;
-    if (device && total !== mountTotal) { notify(`Esta escena tiene ${total} LEDs y el poste ${mountTotal}.`, 'error'); return; }
-    const fit = mountFor(total, mountId);
-    selectMount(fit.id, prepareScene(structuredClone(saved), total, fit.faceCount));
+    let next = structuredClone(saved), total = next.total || editorTotal;
+    // A scene saved for the whole two-face pole is read as one face.
+    if (faceCount === 2 && total === mountTotal) { next = fromPole(prepareScene(next, total, 2), 2); total = editorTotal; }
+    if (total === editorTotal) selectMount(mountId, prepareScene(next, total, 1));
+    else if (device) { notify(`Esta escena tiene ${total} LEDs y el poste ${mountTotal}.`, 'error'); return; }
+    else { const fit = mountFor(total, mountId); selectMount(fit.id, fit.faceCount === 2 ? fromPole(prepareScene(next, total, 2), 2) : prepareScene(next, total, 1)); }
     if (message) notify(message);
   }
 
@@ -157,10 +159,12 @@ export default function App() {
     const detected = mountFor(connected.count, mountId);
     if (!detected) throw new Error(`El poste tiene ${connected.count} LEDs configurados y LUMA admite ${supportedTotals.join(', ')}. Corrígelo en ${connected.address}/settings/leds: el total es el inicio más la longitud de la última salida (dos caras: inicio 0 y 100, longitud 100 cada una).`);
     setDevice(connected); lastLayout.current = null;
-    const fromPole = sceneFromDevice(connected);
-    selectMount(detected.id, fromPole || prepareScene(initialScene, connected.count, detected.faceCount));
-    // What the pole already shows is not sent back to it, unless LUMA just split it into its two faces.
-    syncedScene.current = fromPole && fromPole.segments.length !== sceneRef.current.segments.length ? null : sceneRef.current;
+    const shown = fromPole(sceneFromDevice(connected), detected.faceCount);
+    selectMount(detected.id, shown || prepareScene(initialScene, detected.faceCount === 2 ? detected.count : connected.count, 1));
+    // What the pole already shows is not sent back to it, unless its faces still differ from LUMA's layout.
+    const ranges = list => JSON.stringify(list.map(item => [item.start, item.stop]));
+    const same = ranges(connected.state.seg.filter(item => item.stop > item.start)) === ranges(toPole(sceneRef.current, detected.faceCount, faceBFromTop).segments);
+    syncedScene.current = shown && same ? sceneRef.current : null;
   }
   async function connectTo(value, { silent = false } = {}) {
     setBusy(true); setError(''); const attempt = ++connectAttempt.current;
@@ -222,7 +226,7 @@ export default function App() {
     if (layoutError) { notify(layoutError, 'error'); return; }
     if (!device) { notify('Escena probada en el simulador. Conecta tu poste para enviarla a las luces.'); return; }
     await run(async () => {
-      const confirmed = await applyWled(scene, device, count, faceCount, target);
+      const confirmed = await applyWled(poleScene, device, count, faceCount, target);
       lastLayout.current = confirmed; syncedScene.current = sceneRef.current;
       await remember(scene);
     }, 'Escena aplicada en el poste.');
@@ -234,7 +238,7 @@ export default function App() {
   useEffect(() => () => clearTimeout(rememberTimer.current), []);
   async function remember(saved) {
     clearTimeout(rememberTimer.current);
-    await rememberAppliedScene(device.address, { payload: presetPayload(saved, device, count, faceCount), scene: saved }, poleConfigRef.current);
+    await rememberAppliedScene(device.address, { payload: presetPayload(forPole(saved), device, count, faceCount), scene: saved }, poleConfigRef.current);
     setPoleConfig(config => config && { ...config, def: { ...config.def, ps: APPLIED_PRESET } });
   }
   // Always live while connected: every edit reaches the pole, throttled.
@@ -243,7 +247,7 @@ export default function App() {
     if (!device || layoutError || scene === syncedScene.current) return;
     const timer = setTimeout(() => {
       if (scene === syncedScene.current) return; // already applied meanwhile
-      sendScene(scene, { ...device, state: lastLayout.current || device.state }, count, faceCount, target)
+      sendScene(forPole(scene), { ...device, state: lastLayout.current || device.state }, count, faceCount, target)
         .then(payload => {
           syncedScene.current = scene; lastLayout.current = { ...lastLayout.current, seg: payload.seg.filter(item => item.stop !== 0) };
           clearTimeout(rememberTimer.current);
@@ -262,7 +266,7 @@ export default function App() {
     try { const next = [item, ...savedScenes].slice(0, 12); localStorage.setItem('luma-scenes', JSON.stringify(next)); setSavedScenes(next); }
     catch { if (!onPole) { setError('El navegador no permitió guardar. Revisa que el almacenamiento local esté disponible.'); return; } }
     if (onPole && device) {
-      const saved = await run(async () => { await saveScenePreset(device.address, { name, payload: presetPayload(scene, device, count, faceCount), scene }); await refreshPole(device.address); });
+      const saved = await run(async () => { await saveScenePreset(device.address, { name, payload: presetPayload(forPole(scene), device, count, faceCount), scene }); await refreshPole(device.address); });
       if (!saved) return;
     }
     setModal(null); notify(`“${name}” guardada${onPole && device ? ' en el poste y en este teléfono' : ' en este navegador'}.`);
@@ -273,7 +277,7 @@ export default function App() {
   }
 
   const scenesTab = <ScenesTab connected={!!device} busy={busy} device={device} poleScenes={poleScenes} poleConfig={poleConfig}
-    loadTheme={theme => loadIntoEditor(theme.build(mountTotal, { faceCount, faceBFromTop }), `Tema «${theme.name}» ${device ? 'en el poste' : 'cargado en la vista previa'}.`)}
+    loadTheme={theme => loadIntoEditor(theme.build(editorTotal), `Tema «${theme.name}» ${device ? 'en el poste' : 'cargado en la vista previa'}.`)}
     savedScenes={savedScenes} loadScene={saved => loadIntoEditor(saved, 'Escena cargada en la vista previa.')} removeScene={removeScene}
     applyPoleScene={item => run(async () => { await applyPreset(device.address, item.id); lastLayout.current = null; syncedScene.current = sceneRef.current; }, `«${item.name}» en el poste.`)}
     editPoleScene={item => loadIntoEditor(item.scene, `«${item.name}» cargada en el editor.`)}
@@ -289,9 +293,9 @@ export default function App() {
     <header className="header"><a className="brand" href="./" aria-label="Luma, inicio"><span className="brand-mark"><i /><i /><i /></span>LUMA</a><span className="brand-description">Control de iluminación</span><div className="header-actions"><button className="settings-button" onClick={() => openModal('settings')} aria-label="Mi montaje"><SlidersHorizontal size={17} /><span>Mi montaje</span></button><button className="connect-button" onClick={() => openModal('connect')} title={device ? 'Conectado al poste' : 'Sin conexión: modo demostración'}><i className={`status-dot ${device ? 'on' : 'off'}`} aria-hidden="true" /><span>{device ? 'Conexión' : 'Conectar poste'}</span></button></div></header>
     <main>
       <div className="workspace">
-        <PolePreview expanded={previewExpanded} openPreview={openPreview} closePreview={closePreview} connected={!!device} liveFrame={liveFrame} liveStatus={liveStatus} retryLive={() => setLiveAttempt(value => value + 1)} scene={scene} count={count} faceCount={faceCount} faceBFromTop={faceBFromTop} view={view} setView={setView} onPower={() => updateScene({ ...scene, on: !scene.on })} />
+        <PolePreview expanded={previewExpanded} openPreview={openPreview} closePreview={closePreview} connected={!!device} liveFrame={liveFrame} liveStatus={liveStatus} retryLive={() => setLiveAttempt(value => value + 1)} scene={poleScene} count={count} faceCount={faceCount} faceBFromTop={faceBFromTop} view={view} setView={setView} onPower={() => updateScene({ ...scene, on: !scene.on })} />
         <SceneControls scene={scene} face={face} target={target} setTarget={setTarget} targetName={targetName} selectDesign={selectDesign} openPreview={openPreview} updateFace={updateFace} updateScene={updateScene}
-          segmentEditor={<SegmentEditor scene={scene} total={mountTotal} target={target} setTarget={setTarget} updateScene={updateScene} limit={device?.maxSegments} />}
+          segmentEditor={<SegmentEditor scene={scene} total={editorTotal} target={target} setTarget={setTarget} updateScene={updateScene} limit={segmentLimit} />}
           scenesTab={scenesTab} invalid={!!layoutError} deviceEffects={device?.effects} apply={apply}
           save={() => openModal('save')} busy={busy} connected={!!device}
           undo={() => travel('back')} redo={() => travel('forward')} canUndo={historySize.past > 0} canRedo={historySize.future > 0} />

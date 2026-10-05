@@ -21,13 +21,29 @@ export function prepareScene(scene, total, faceCount = 2) {
   return { ...scene, transition: scene.transition ?? 0.4, total, segments, faces: segments.map((_, i) => structuredClone(scene.faces[i] || scene.faces[0])) };
 }
 
-// A design for the whole pole on a two-face mount runs once per face (same sequence on both sides)
-// instead of flowing from face A into face B as one 200-LED strip.
-export function perFace(scene, faceCount) {
-  if (faceCount !== 2 || scene.segments?.length !== 1) return scene;
-  const [only] = scene.segments;
-  if (only.start !== 0 || only.stop !== scene.total) return scene;
-  return { ...scene, segments: faceSegments(scene.total, 2), faces: [structuredClone(scene.faces[0]), structuredClone(scene.faces[0])] };
+// Two faces always show the same thing. The editor works on one face (`count` LEDs) and LUMA copies it
+// to face B whenever it talks to the pole or draws the preview. With face B wired from the top its
+// ranges and directions are flipped, so both sides read the same from the ground.
+export function toPole(scene, faceCount, faceBFromTop = false) {
+  if (faceCount !== 2) return scene;
+  const half = scene.total;
+  const pairs = scene.segments.map((segment, i) => [segment, scene.faces[i]]);
+  const faceB = pairs.map(([segment, face]) => [
+    { ...segment, start: faceBFromTop ? 2 * half - segment.stop : half + segment.start, stop: faceBFromTop ? 2 * half - segment.start : half + segment.stop },
+    faceBFromTop ? { ...structuredClone(face), reverse: !face.reverse } : structuredClone(face),
+  ]).sort(([a], [b]) => a.start - b.start);
+  const all = [...pairs, ...faceB];
+  return { ...scene, total: half * 2, segments: all.map(([segment], id) => ({ ...segment, id })), faces: all.map(([, face]) => face) };
+}
+// The reverse: what a two-face pole shows, read as one face (face A). Older scenes that ran one design
+// across both faces as a single strip keep their design on face A.
+export function fromPole(scene, faceCount) {
+  if (faceCount !== 2 || !scene?.segments) return scene;
+  const half = scene.total / 2;
+  const kept = scene.segments.map((segment, i) => [segment, scene.faces[i]]).filter(([segment]) => segment.start < half);
+  const segments = kept.map(([segment], id) => ({ ...segment, id, stop: Math.min(segment.stop, half) }));
+  if (segments.length === 1) segments[0].name = defaultSegments(half)[0].name;
+  return { ...scene, total: half, segments, faces: kept.map(([, face]) => face) };
 }
 
 // Distinct, saturated colours read clearly at a distance; black secondary leaves room for movement.

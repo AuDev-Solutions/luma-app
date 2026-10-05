@@ -113,12 +113,17 @@ test('Pole split in 4 equal parts: one colour each over black, sharing one desig
   assert.deepEqual(payload.seg[0].col.slice(0, 2), [[255, 10, 10], [255, 255, 255]]);
 });
 
-test('Two faces: one design runs once per face, not as one 200-LED strip', async () => {
-  const { perFace } = await import('../src/lib/segments.js');
-  const whole = prepareScene(initialScene, 200, 2);
-  assert.deepEqual(whole.segments.map(item => [item.name, item.start, item.stop]), [['Cara A', 0, 100], ['Cara B', 100, 200]]);
-  assert.deepEqual(whole.faces[0], whole.faces[1]);
-  const fromPole = { ...prepareScene(initialScene, 100, 1), total: 200, segments: [{ id: 0, name: 'Todo el poste', start: 0, stop: 200 }] };
-  assert.deepEqual(perFace(fromPole, 2).segments.map(item => [item.start, item.stop]), [[0, 100], [100, 200]]);
-  assert.equal(perFace(fromPole, 1), fromPole, 'one face keeps a single segment');
+test('Two faces always show the same: one face is edited, LUMA copies it to face B', async () => {
+  const { toPole, fromPole } = await import('../src/lib/segments.js');
+  const face = carveSegment(prepareScene(initialScene, 100, 1), 0, 30).scene;
+  const pole = toPole(face, 2);
+  assert.deepEqual(pole.segments.map(item => [item.id, item.start, item.stop]), [[0, 0, 30], [1, 30, 100], [2, 100, 130], [3, 130, 200]]);
+  assert.deepEqual(pole.faces[2], pole.faces[0]);
+  assert.equal(segmentError(pole, 200), '');
+  const fromTop = toPole(face, 2, true);
+  assert.deepEqual(fromTop.segments.slice(2).map(item => [item.start, item.stop]), [[100, 170], [170, 200]], 'face B from the top runs downwards');
+  assert.equal(fromTop.faces[3].reverse, true);
+  assert.deepEqual(fromPole(pole, 2).segments, face.segments);
+  const oldStrip = { ...prepareScene(initialScene, 100, 1), total: 200, segments: [{ id: 0, name: 'Todo el poste', start: 0, stop: 200 }] };
+  assert.deepEqual(fromPole(oldStrip, 2).segments, [{ id: 0, name: 'Todo el poste', start: 0, stop: 100 }]);
 });

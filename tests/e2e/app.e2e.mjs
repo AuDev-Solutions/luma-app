@@ -16,13 +16,18 @@ function browserPath() {
 }
 
 const effects = ['Solid', 'Gradient', 'Running', 'Chase 2', 'Meteor', 'Fire 2012', 'Drip'];
-function createPole() {
+function createPole({ twoFaces = false } = {}) {
   const pole = {
     state: { on: true, bri: 255, transition: 4, seg: [{ id: 0, start: 0, stop: 100, on: true, bri: 166, fx: 1, sx: 71, ix: 15, pal: 3, col: [[164, 255, 194], [32, 140, 255], [0, 0, 0]] }] },
     presets: { 0: {} }, cfg: { hw: { led: { ins: [{ start: 0, len: 100, pin: [17], type: 22, maxpwr: 0, ledma: 30 }] } }, ap: { ssid: 'WLED-AP', pskl: 0, behav: 0 }, nw: { ins: [{ ssid: 'Casa' }] }, ota: { lock: false }, if: { ntp: { en: false, tz: 0, offset: 0 } }, timers: { ins: [] }, def: { ps: 0 } },
     posts: [], cfgPosts: [], uploads: 0,
   };
-  pole.info = () => ({ name: 'Poste de prueba', time: '2026-9-30, 20:00:00', leds: { count: 100, maxseg: 16, pwr: 1200 } });
+  if (twoFaces) {
+    // Real pole: face A on GPIO 17, face B on GPIO 3 (I2S), still showing one 200-LED strip.
+    pole.state.seg[0].stop = 200;
+    pole.cfg.hw.led.ins = [{ start: 0, len: 100, pin: [17], type: 22, maxpwr: 0, ledma: 30, drv: 0 }, { start: 100, len: 100, pin: [3], type: 22, maxpwr: 0, ledma: 30, drv: 1 }];
+  }
+  pole.info = () => ({ name: 'Poste de prueba', time: '2026-9-30, 20:00:00', leds: { count: twoFaces ? 200 : 100, maxseg: 16, pwr: 1200 } });
   pole.route = async route => {
     const request = route.request(), path = new URL(request.url()).pathname, method = request.method();
     if (path === '/presets.json') return route.fulfill({ json: pole.presets });
@@ -59,12 +64,12 @@ test.before(async () => {
 });
 test.after(async () => { await browser?.close(); await new Promise(resolve => server?.httpServer.close(resolve)); });
 
-async function open({ mobile = false, connect = true } = {}) {
+async function open({ mobile = false, connect = true , twoFaces = false } = {}) {
   const context = await browser.newContext(mobile ? { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true } : { viewport: { width: 1440, height: 1000 } });
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
-  const pole = createPole();
+  const pole = createPole({ twoFaces });
   await page.route('http://pole.test/**', pole.route);
   await page.goto(url);
   if (connect) {
@@ -210,6 +215,22 @@ test('Standalone Wi-Fi: the pole gets its own network and the app explains how t
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   await page.getByRole('button', { name: 'Entendido' }).click();
   assert.ok(await page.locator('.status-dot.off').count(), 'the app shows it is no longer connected');
+  assert.deepEqual(errors, []); await close();
+});
+
+test('Two faces always show the same: one face is edited and copied to the other', async () => {
+  const { page, pole, errors, close } = await open({ twoFaces: true });
+  await page.getByText('Dos caras iguales · 100 píxeles por cara').waitFor();
+  await settled(pole);
+  const ranges = () => pole.posts.at(-1).seg.filter(item => item.stop).map(item => [item.start, item.stop, effects[item.fx], item.col[0].join()]);
+  assert.deepEqual(ranges().map(item => item.slice(0, 2)), [[0, 100], [100, 200]], 'the old 200-LED strip is split into the two faces on connect');
+  assert.equal(await page.getByRole('button', { name: 'Cara A', exact: true }).count(), 0, 'faces cannot be edited separately');
+  await page.getByRole('tab', { name: 'Segmentos' }).click();
+  await page.getByRole('button', { name: 'Partir en 2', exact: true }).click();
+  await page.waitForTimeout(600);
+  const [a1, a2, b1, b2] = ranges();
+  assert.deepEqual([a1, a2, b1, b2].map(item => item.slice(0, 2)), [[0, 50], [50, 100], [100, 150], [150, 200]]);
+  assert.deepEqual([b1[2], b1[3], b2[2], b2[3]], [a1[2], a1[3], a2[2], a2[3]], 'face B repeats face A');
   assert.deepEqual(errors, []); await close();
 });
 
