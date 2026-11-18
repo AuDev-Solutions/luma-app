@@ -191,6 +191,19 @@ export async function setLedCount(address, total) {
   if (!Number.isInteger(share)) throw new Error(`No se pueden repartir ${total} LEDs entre ${outputs.length} salidas.`);
   await request(address, '/json/cfg', { hw: { led: { ins: outputs.map((bus, index) => ({ ...bus, start: copied ? 0 : index * share, len: share })) } } });
   await confirmCount(address, total, `El poste recibió el cambio, pero no confirmó ${total} LEDs. Revisa la configuración de LEDs del controlador.`);
+  if (outputs.length === 2) await restartPole(address);
+}
+
+// With two outputs, face B's I2S output stays dark after its outputs are re-initialised at runtime
+// (seen on the pole, WLED 17.0.0-dev, 2026-11-18); it lights again after a restart, which reads cfg.json.
+async function restartPole(address, wait = 1500) {
+  await request(address, '/json/state', { rb: true }).catch(() => {});
+  for (let attempt = 0; attempt < 30; attempt++) {
+    await new Promise(resolve => setTimeout(resolve, wait));
+    const info = await request(address, '/json/info').catch(() => null);
+    if (info && (info.uptime ?? 0) < 60) return;
+  }
+  throw new Error('El poste no volvió después de reiniciarse. Apágalo, vuelve a encenderlo y conecta LUMA de nuevo.');
 }
 
 // Bus re-initialisation happens in WLED's next loop; poll until it reports the new count.
@@ -217,5 +230,6 @@ export async function copyFaceB(address) {
   }
   await request(address, '/json/cfg', { hw: { led: { ins: outputs.map(bus => ({ ...bus, start: 0 })) } } });
   await confirmCount(address, outputs[0].len, 'El poste recibió el cambio, pero sigue mostrando las caras por separado. Apágalo y vuelve a encenderlo, y conecta LUMA de nuevo.');
+  await restartPole(address);
   return true;
 }

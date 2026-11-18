@@ -64,12 +64,14 @@ test('Undo and redo restore colour changes', async () => {
   const { page, errors, close } = await open({ connect: false });
   const hex = page.getByRole('textbox', { name: 'Código hexadecimal del color' });
   const before = await hex.inputValue();
+  // Colour changes render on the next frame: wait for the field instead of reading it at once.
+  const shows = async expected => { for (let i = 0; i < 40 && await hex.inputValue() !== expected; i++) await page.waitForTimeout(50); return hex.inputValue(); };
   await page.getByRole('button', { name: 'Rojo', exact: true }).click();
-  assert.equal(await hex.inputValue(), '#ff0000');
+  assert.equal(await shows('#ff0000'), '#ff0000');
   await page.getByRole('button', { name: /Deshacer/ }).click();
-  assert.equal(await hex.inputValue(), before);
+  assert.equal(await shows(before), before);
   await page.getByRole('button', { name: /Rehacer/ }).click();
-  assert.equal(await hex.inputValue(), '#ff0000');
+  assert.equal(await shows('#ff0000'), '#ff0000');
   assert.deepEqual(errors, []); await close();
 });
 
@@ -98,6 +100,20 @@ test('Themes, master brightness and saving on the pole (without applying it whil
   await page.getByRole('button', { name: 'Mostrar Navidad 60 en el poste' }).click();
   await page.getByText('«Navidad 60» en el poste.').waitFor();
   assert.deepEqual(pole.posts.at(-1), { ps: 1 });
+  assert.deepEqual(errors, []); await close();
+});
+
+test('After a flag theme, another design changes the whole pole, not one band', async () => {
+  const { page, pole, errors, close } = await open();
+  await page.getByRole('tab', { name: 'Escenas' }).click();
+  await page.getByRole('button', { name: /Fiestas patrias/ }).click();
+  await settled(pole);
+  assert.equal(pole.posts.at(-1).seg.filter(item => item.stop).length, 3, 'the flag has three bands');
+  await page.getByRole('tab', { name: 'Efectos' }).click();
+  await page.getByRole('button', { name: 'Seleccionar Fuego ámbar' }).click();
+  await page.waitForTimeout(600);
+  const bands = pole.posts.at(-1).seg.filter(item => item.stop).map(item => [item.start, item.stop, effects[item.fx]]);
+  assert.deepEqual(bands, [[0, 100, 'Fire 2012']], 'the design covers the whole pole');
   assert.deepEqual(errors, []); await close();
 });
 

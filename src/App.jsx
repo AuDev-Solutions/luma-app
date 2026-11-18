@@ -7,7 +7,7 @@ import ScenesTab from './components/ScenesTab.jsx';
 import ConnectModal from './components/ConnectModal.jsx';
 import SaveModal from './components/SaveModal.jsx';
 import SettingsModal from './components/SettingsModal.jsx';
-import { prepareScene, toPole, fromPole, segmentError } from './lib/segments.js';
+import { prepareScene, toPole, fromPole, segmentError, defaultSegments } from './lib/segments.js';
 import { effectById, initialScene, readSavedScenes, presetFace } from './lib/scenes.js';
 import { applyWled, connectWled, sceneFromDevice, setLedCount, copyFaceB, sendScene, presetPayload, request, setSettingsPin, PinRequiredError } from './lib/wled.js';
 import { readPresets, listScenes, rememberAppliedScene, APPLIED_PRESET, saveScenePreset, deletePreset, applyPreset, saveAutoMode, syncClock, clockStatus, saveSchedule, clearSchedule, setBootPreset, setCurrentLimit, setStandaloneNetwork, localOffsetSeconds } from './lib/controller.js';
@@ -116,7 +116,15 @@ export default function App() {
   const layoutError = segmentError(scene, editorTotal, segmentLimit);
   const forPole = editing => toPole(editing, faceCount, faceBFromTop);
   const poleScene = forPole(scene);
-  function updateScene(next) { setScene(next); }
+  // A theme stays a theme only while its parts are untouched: dividing or merging makes it the user's own.
+  function updateScene(next) {
+    setScene(current => {
+      const resolved = typeof next === 'function' ? next(current) : next;
+      if (!resolved.theme || resolved.segments === current.segments) return resolved;
+      const { theme, ...own } = resolved;
+      return own;
+    });
+  }
   useEffect(() => () => clearTimeout(timerRef.current), []);
   const notify = (message, type = 'success') => { clearTimeout(timerRef.current); setToast({ message, type }); if (type !== 'error') timerRef.current = setTimeout(() => setToast(null), 6000); };
   const openModal = name => { setError(''); setModal(name); };
@@ -136,7 +144,8 @@ export default function App() {
   function selectMount(id, nextScene) {
     const selected = mountById(id);
     const next = nextScene || prepareScene({ ...sceneRef.current, segments: undefined }, selected.faceCount === 2 ? selected.count : selected.total, 1);
-    setMountId(id); writeSetting('luma-mount', id); setTarget(next.segments[0].id); setScene(next);
+    // A loaded scene with several parts is edited as a whole until one part is picked.
+    setMountId(id); writeSetting('luma-mount', id); setTarget(next.segments.length > 1 ? 'all' : next.segments[0].id); setScene(next);
   }
   function loadIntoEditor(saved, message) {
     let next = structuredClone(saved), total = next.total || editorTotal;
@@ -227,6 +236,8 @@ export default function App() {
     const { colors, ...design } = presetFace(effect);
     // Only parts that were given their own colours keep them (a pole split in 4); two faces with the same
     // design take the new design's colours.
+    // Another design after a theme (a flag, Navidad…) replaces the theme on the whole pole.
+    if (scene.theme && target === 'all') { const { theme, ...rest } = scene; updateScene({ ...rest, segments: defaultSegments(rest.total), faces: [{ ...design, colors }] }); setTarget(0); return; }
     const ownColours = new Set(scene.faces.map(face => face.colors.join())).size > 1;
     updateFace(target === 'all' && ownColours && !effect.spectrum ? design : { ...design, colors });
   }
@@ -288,7 +299,7 @@ export default function App() {
   }
 
   const scenesTab = <ScenesTab connected={!!device} busy={busy} device={device} poleScenes={poleScenes} poleConfig={poleConfig}
-    loadTheme={theme => loadIntoEditor(theme.build(editorTotal), `Tema «${theme.name}» ${device ? 'en el poste' : 'cargado en la vista previa'}.`)}
+    loadTheme={theme => loadIntoEditor({ ...theme.build(editorTotal), theme: theme.id }, `Tema «${theme.name}» ${device ? 'en el poste' : 'cargado en la vista previa'}.`)}
     savedScenes={savedScenes} loadScene={saved => loadIntoEditor(saved, 'Escena cargada en la vista previa.')} removeScene={removeScene}
     applyPoleScene={item => run(async () => { await applyPreset(device.address, item.id); lastLayout.current = null; syncedScene.current = sceneRef.current; }, `«${item.name}» en el poste.`)}
     editPoleScene={item => loadIntoEditor(item.scene, `«${item.name}» cargada en el editor.`)}

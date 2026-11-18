@@ -51,8 +51,9 @@ test('Two data pins (GPIO 17 and 18): changing the count splits it evenly betwee
   const posts = []; let count = 200;
   const original = globalThis.fetch;
   globalThis.fetch = async (url, options) => {
+    if (options.method === 'POST' && url.endsWith('/json/state')) return { ok: true, json: async () => ({ success: true }) };
     if (options.method === 'POST') { const body = JSON.parse(options.body); posts.push(body); count = body.hw.led.ins.reduce((sum, item) => sum + item.len, 0); return { ok: true, json: async () => ({ success: true }) }; }
-    return { ok: true, json: async () => url.endsWith('/json/cfg') ? { hw: { led: { ins: [bus, { ...bus, start: 100, pin: [18] }] } } } : { leds: { count } } };
+    return { ok: true, json: async () => url.endsWith('/json/cfg') ? { hw: { led: { ins: [bus, { ...bus, start: 100, pin: [18] }] } } } : { leds: { count }, uptime: 3 } };
   };
   try {
     await setLedCount('http://pole.test', 400);
@@ -76,16 +77,18 @@ test('Outputs that both start at LED 1 are two faces copied by the controller', 
 test('Copying face B: its output moves to LED 1 keeping pin, driver and limits; the pole then reports one face', async () => {
   const a = { start: 0, len: 100, pin: [17], type: 22, maxpwr: 0, ledma: 30, drv: 0 };
   const b = { ...a, start: 100, pin: [3], drv: 1 };
-  let ins = [a, b]; const posts = [];
+  let ins = [a, b]; const posts = []; let restarts = 0;
   const original = globalThis.fetch;
   globalThis.fetch = async (url, options) => {
+    if (options.method === 'POST' && url.endsWith('/json/state')) { restarts++; return { ok: true, json: async () => ({ success: true }) }; }
     if (options.method === 'POST') { const body = JSON.parse(options.body); posts.push(body); ins = body.hw.led.ins; return { ok: true, json: async () => ({ success: true }) }; }
     const count = Math.max(...ins.map(bus => bus.start + bus.len));
-    return { ok: true, json: async () => url.endsWith('/json/cfg') ? { hw: { led: { ins } } } : { leds: { count } } };
+    return { ok: true, json: async () => url.endsWith('/json/cfg') ? { hw: { led: { ins } } } : { leds: { count }, uptime: 3 } };
   };
   try {
     assert.equal(await copyFaceB('http://pole.test'), true);
     assert.deepEqual(posts, [{ hw: { led: { ins: [a, { ...b, start: 0 }] } } }]);
+    assert.equal(restarts, 1, 'the pole restarts so the I2S output of face B lights again');
     assert.equal(await copyFaceB('http://pole.test'), false, 'already copied: nothing is written');
     await setLedCount('http://pole.test', 200);
     assert.deepEqual(posts[1].hw.led.ins.map(bus => [bus.pin[0], bus.start, bus.len]), [[17, 0, 200], [3, 0, 200]], 'both faces grow together');

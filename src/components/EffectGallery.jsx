@@ -8,14 +8,13 @@ const EffectArt = memo(function EffectArt({ effect }) {
   return <svg className="design-art" viewBox="0 0 160 92" aria-hidden="true">
     <defs><linearGradient id={`wash-${effect.id}`} x2="1" y2="1"><stop stopColor={effect.colors[0]} stopOpacity=".15" /><stop offset="1" stopColor={effect.colors[1]} stopOpacity=".02" /></linearGradient></defs>
     <rect width="160" height="92" fill={`url(#wash-${effect.id})`} />
-    {[57, 99].map((x, column) => <g key={x}>
-      <rect x={x - 5} y="9" width="10" height="75" rx="4" fill="#0a1218" stroke="#ffffff17" />
-      {Array.from({ length: 24 }, (_, i) => {
-        const { color, intensity } = pixelColor(face, i / 23, 3.4 + column * .5, i);
-        return <g key={i} opacity={Math.max(.12, intensity)}><circle cx={x} cy={79 - i * 2.8} r="5" fill={`rgb(${color})`} opacity=".13" /><circle cx={x} cy={79 - i * 2.8} r="1.5" fill={`rgb(${color})`} /></g>;
-      })}
-    </g>)}
-    <path d="M39 85h36m7 0h36" stroke="#ffffff14" />
+    {/* One pole: both faces always show the same. */}
+    <rect x="75" y="9" width="10" height="75" rx="4" fill="#0a1218" stroke="#ffffff17" />
+    {Array.from({ length: 24 }, (_, i) => {
+      const { color, intensity } = pixelColor(face, i / 23, 3.4, i);
+      return <g key={i} opacity={Math.max(.12, intensity)}><circle cx="80" cy={79 - i * 2.8} r="5" fill={`rgb(${color})`} opacity=".13" /><circle cx="80" cy={79 - i * 2.8} r="1.5" fill={`rgb(${color})`} /></g>;
+    })}
+    <path d="M62 85h36" stroke="#ffffff14" />
   </svg>;
 });
 
