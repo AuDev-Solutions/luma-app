@@ -12,10 +12,17 @@ test.before(async () => {
   url = server.resolvedUrls.local[0];
   browser = await chromium.launch({ executablePath: browserPath(), channel: browserPath() ? undefined : 'chrome' });
 });
-test.after(async () => { await browser?.close(); await new Promise(resolve => server?.httpServer.close(resolve)); });
+test.after(async () => {
+  await browser?.close();
+  await new Promise(resolve => server?.httpServer.close(resolve));
+});
 
-async function open({ mobile = false, connect = true , twoFaces = false } = {}) {
-  const context = await browser.newContext(mobile ? { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true } : { viewport: { width: 1440, height: 1000 } });
+async function open({ mobile = false, connect = true, twoFaces = false } = {}) {
+  const context = await browser.newContext(
+    mobile
+      ? { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true }
+      : { viewport: { width: 1440, height: 1000 } },
+  );
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
@@ -30,6 +37,14 @@ async function open({ mobile = false, connect = true , twoFaces = false } = {}) 
     await page.getByRole('button', { name: 'Cerrar notificación' }).click();
   }
   return { page, pole, errors, close: () => context.close() };
+}
+// Waits until `check` holds (live edits reach the pole a moment later), at most 5 s.
+async function until(check, message) {
+  for (let i = 0; i < 100; i++) {
+    if (await check()) return;
+    await new Promise(resolve => setTimeout(resolve, 50));
+  }
+  throw new Error(message);
 }
 // Live changes settle, then the pole keeps them as its boot scene (preset 248).
 async function settled(pole) {
@@ -54,10 +69,19 @@ test('Pole split in 4: each part keeps its colour when one effect is chosen for 
   await page.getByRole('button', { name: 'Seleccionar Onda esmeralda', exact: true }).click();
   await settled(pole);
   const seg = pole.posts.at(-1).seg.filter(item => item.stop);
-  assert.deepEqual(seg.map(item => [item.start, item.stop, effects[item.fx]]), [[0, 25, 'Running'], [25, 50, 'Running'], [50, 75, 'Running'], [75, 100, 'Running']]);
+  assert.deepEqual(
+    seg.map(item => [item.start, item.stop, effects[item.fx]]),
+    [
+      [0, 25, 'Running'],
+      [25, 50, 'Running'],
+      [50, 75, 'Running'],
+      [75, 100, 'Running'],
+    ],
+  );
   assert.deepEqual(seg[1].col[0], [255, 0, 255]);
   assert.equal(new Set(seg.map(item => item.col[0].join())).size, 4);
-  assert.deepEqual(errors, []); await close();
+  assert.deepEqual(errors, []);
+  await close();
 });
 
 test('Undo and redo restore colour changes', async () => {
@@ -65,14 +89,18 @@ test('Undo and redo restore colour changes', async () => {
   const hex = page.getByRole('textbox', { name: 'Código hexadecimal del color' });
   const before = await hex.inputValue();
   // Colour changes render on the next frame: wait for the field instead of reading it at once.
-  const shows = async expected => { for (let i = 0; i < 40 && await hex.inputValue() !== expected; i++) await page.waitForTimeout(50); return hex.inputValue(); };
+  const shows = async expected => {
+    for (let i = 0; i < 40 && (await hex.inputValue()) !== expected; i++) await page.waitForTimeout(50);
+    return hex.inputValue();
+  };
   await page.getByRole('button', { name: 'Rojo', exact: true }).click();
   assert.equal(await shows('#ff0000'), '#ff0000');
   await page.getByRole('button', { name: /Deshacer/ }).click();
   assert.equal(await shows(before), before);
   await page.getByRole('button', { name: /Rehacer/ }).click();
   assert.equal(await shows('#ff0000'), '#ff0000');
-  assert.deepEqual(errors, []); await close();
+  assert.deepEqual(errors, []);
+  await close();
 });
 
 test('Themes, master brightness and saving on the pole (without applying it while saving)', async () => {
@@ -83,8 +111,12 @@ test('Themes, master brightness and saving on the pole (without applying it whil
   await settled(pole);
   const post = pole.posts.at(-1);
   assert.equal(post.bri, 153);
-  assert.equal(pole.presets[248].n, 'Escena aplicada'); assert.equal(pole.presets[248].on, true);
-  assert.ok(pole.cfgPosts.some(body => body.def?.ps === 248), 'the live scene becomes the boot scene');
+  assert.equal(pole.presets[248].n, 'Escena aplicada');
+  assert.equal(pole.presets[248].on, true);
+  assert.ok(
+    pole.cfgPosts.some(body => body.def?.ps === 248),
+    'the live scene becomes the boot scene',
+  );
   assert.equal(effects[post.seg[0].fx], 'Chase 2');
   const postsBeforeSave = pole.posts.length;
   await page.getByRole('button', { name: 'Guardar escena', exact: true }).click();
@@ -100,7 +132,8 @@ test('Themes, master brightness and saving on the pole (without applying it whil
   await page.getByRole('button', { name: 'Mostrar Navidad 60 en el poste' }).click();
   await page.getByText('«Navidad 60» en el poste.').waitFor();
   assert.deepEqual(pole.posts.at(-1), { ps: 1 });
-  assert.deepEqual(errors, []); await close();
+  assert.deepEqual(errors, []);
+  await close();
 });
 
 test('After a flag theme, another design changes the whole pole, not one band', async () => {
@@ -111,10 +144,14 @@ test('After a flag theme, another design changes the whole pole, not one band', 
   assert.equal(pole.posts.at(-1).seg.filter(item => item.stop).length, 3, 'the flag has three bands');
   await page.getByRole('tab', { name: 'Efectos' }).click();
   await page.getByRole('button', { name: 'Seleccionar Fuego ámbar' }).click();
-  await page.waitForTimeout(600);
-  const bands = pole.posts.at(-1).seg.filter(item => item.stop).map(item => [item.start, item.stop, effects[item.fx]]);
+  await until(() => effects[pole.posts.at(-1).seg?.[0]?.fx] === 'Fire 2012', 'the new design never reached the pole');
+  const bands = pole.posts
+    .at(-1)
+    .seg.filter(item => item.stop)
+    .map(item => [item.start, item.stop, effects[item.fx]]);
   assert.deepEqual(bands, [[0, 100, 'Fire 2012']], 'the design covers the whole pole');
-  assert.deepEqual(errors, []); await close();
+  assert.deepEqual(errors, []);
+  await close();
 });
 
 test('Automatic mode and sunset schedule are written to the pole', async () => {
@@ -143,7 +180,8 @@ test('Automatic mode and sunset schedule are written to the pole', async () => {
   assert.equal(cfg.timers.ins[1].macro, 250);
   assert.deepEqual([cfg.if.ntp.lt, cfg.if.ntp.ln], [4.81, -75.69]);
   assert.deepEqual(pole.presets[250], { n: 'Apagar', on: false });
-  assert.deepEqual(errors, []); await close();
+  assert.deepEqual(errors, []);
+  await close();
 });
 
 test('Current limit from the power-supply rating keeps the LED output', async () => {
@@ -153,18 +191,29 @@ test('Current limit from the power-supply rating keeps the LED output', async ()
   await page.getByRole('spinbutton', { name: 'Amperios de la fuente' }).fill('10');
   await page.getByRole('button', { name: 'Limitar a 8,5 A' }).click();
   await page.getByText('Límite de corriente: 8,5 A.').waitFor();
-  assert.deepEqual(pole.cfgPosts.at(-1).hw.led.ins[0], { start: 0, len: 100, pin: [17], type: 22, maxpwr: 8500, ledma: 30 });
-  assert.deepEqual(errors, []); await close();
+  assert.deepEqual(pole.cfgPosts.at(-1).hw.led.ins[0], {
+    start: 0,
+    len: 100,
+    pin: [17],
+    type: 22,
+    maxpwr: 8500,
+    ledma: 30,
+  });
+  assert.deepEqual(errors, []);
+  await close();
 });
 
 test('Changes reach the pole without pressing Apply', async () => {
   const { page, pole, errors, close } = await open();
   const count = pole.posts.length;
   await page.getByRole('button', { name: 'Azul', exact: true }).click();
-  await page.waitForTimeout(600);
-  assert.ok(pole.posts.length > count, 'change sent automatically');
+  await until(
+    () => pole.posts.length > count && pole.posts.at(-1).seg?.[0]?.col[0].join() === '0,0,255',
+    'change never sent',
+  );
   assert.deepEqual(pole.posts.at(-1).seg[0].col[0], [0, 0, 255]);
-  assert.deepEqual(errors, []); await close();
+  assert.deepEqual(errors, []);
+  await close();
 });
 
 test('Standalone Wi-Fi: the pole gets its own network and the app explains how to rejoin it', async () => {
@@ -177,11 +226,16 @@ test('Standalone Wi-Fi: the pole gets its own network and the app explains how t
   await page.getByRole('button', { name: 'Continuar' }).click();
   await page.getByRole('button', { name: 'Guardar y reiniciar el poste' }).click();
   await page.getByText('El poste se está reiniciando').waitFor();
-  assert.deepEqual(pole.cfgPosts.at(-1), { ap: { ssid: 'LUMA-Poste1', psk: 'poste-seguro-1', behav: 2 }, nw: { ins: [{ ssid: 'Your_Network' }] }, rb: true });
+  assert.deepEqual(pole.cfgPosts.at(-1), {
+    ap: { ssid: 'LUMA-Poste1', psk: 'poste-seguro-1', behav: 2 },
+    nw: { ins: [{ ssid: 'Your_Network' }] },
+    rb: true,
+  });
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   await page.getByRole('button', { name: 'Entendido' }).click();
   assert.ok(await page.locator('.status-dot.off').count(), 'the app shows it is no longer connected');
-  assert.deepEqual(errors, []); await close();
+  assert.deepEqual(errors, []);
+  await close();
 });
 
 test('Two faces on their own pins: face B repeats face A in hardware, one pole is shown', async () => {
@@ -190,18 +244,41 @@ test('Two faces on their own pins: face B repeats face A in hardware, one pole i
   await settled(pole);
   // Both outputs start at LED 1: WLED sends every pixel to both pins, so random effects match too.
   const outputs = pole.cfg.hw.led.ins.map(bus => [bus.pin[0], bus.start, bus.len, bus.drv]);
-  assert.deepEqual(outputs, [[17, 0, 100, 0], [3, 0, 100, 1]], 'pins and drivers are kept, face B starts at LED 1');
-  const ranges = () => pole.posts.at(-1).seg.filter(item => item.stop).map(item => [item.start, item.stop]);
+  assert.deepEqual(
+    outputs,
+    [
+      [17, 0, 100, 0],
+      [3, 0, 100, 1],
+    ],
+    'pins and drivers are kept, face B starts at LED 1',
+  );
+  const ranges = () =>
+    pole.posts
+      .at(-1)
+      .seg.filter(item => item.stop)
+      .map(item => [item.start, item.stop]);
   assert.deepEqual(ranges(), [[0, 100]], 'one face is sent; the controller copies it to face B');
-  assert.equal(await page.getByRole('button', { name: 'Cara A', exact: true }).count(), 0, 'faces cannot be edited separately');
+  assert.equal(
+    await page.getByRole('button', { name: 'Cara A', exact: true }).count(),
+    0,
+    'faces cannot be edited separately',
+  );
   await page.getByRole('tab', { name: 'Segmentos' }).click();
   await page.getByRole('button', { name: 'Partir en 2', exact: true }).click();
-  await page.waitForTimeout(600);
-  assert.deepEqual(ranges(), [[0, 50], [50, 100]]);
+  await until(() => ranges().length === 2, 'the split never reached the pole');
+  assert.deepEqual(ranges(), [
+    [0, 50],
+    [50, 100],
+  ]);
   await page.getByRole('button', { name: 'Mi montaje' }).click();
   await page.getByText('Dos caras · 200 LEDs').first().waitFor();
-  assert.equal(await page.getByRole('button', { name: /usar 200 LEDs/ }).count(), 0, 'no series wiring offer with one face per pin');
-  assert.deepEqual(errors, []); await close();
+  assert.equal(
+    await page.getByRole('button', { name: /usar 200 LEDs/ }).count(),
+    0,
+    'no series wiring offer with one face per pin',
+  );
+  assert.deepEqual(errors, []);
+  await close();
 });
 
 test('Mobile: every tab fits the screen', async () => {
@@ -212,5 +289,6 @@ test('Mobile: every tab fits the screen', async () => {
   }
   await page.getByRole('button', { name: 'Mi montaje' }).click();
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'Mi montaje');
-  assert.deepEqual(errors, []); await close();
+  assert.deepEqual(errors, []);
+  await close();
 });

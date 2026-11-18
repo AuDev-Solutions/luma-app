@@ -6,8 +6,10 @@ import { effects, presetFace, pixelColor } from '../src/lib/scenes.js';
 
 test('Peek preserves physical LED order, RGB and off pixels without downsampling', () => {
   for (const count of [50, 100, 400]) {
-    const input = new Uint8Array(2 + count * 3); input.set([76, 1]);
-    input.set([255, 0, 0], 2); input.set([0, 0, 255], 2 + (count - 1) * 3);
+    const input = new Uint8Array(2 + count * 3);
+    input.set([76, 1]);
+    input.set([255, 0, 0], 2);
+    input.set([0, 0, 255], 2 + (count - 1) * 3);
     const decoded = decodeLiveFrame(input.buffer, count);
     assert.deepEqual([...decoded.slice(0, 6)], [255, 0, 0, 0, 0, 0]);
     assert.deepEqual([...decoded.slice(-3)], [0, 0, 255]);
@@ -31,7 +33,8 @@ test('Fireworks 1D resolves the native effect with the default palette', () => {
   const face = presetFace(effects.find(effect => effect.id === 'fireworks'));
   const device = { count: 100, effects: ['Solid', 'Fireworks 1D'], state: { seg: [{ id: 0, start: 0, stop: 100 }] } };
   const payload = buildPayload({ on: true, faces: [face, face] }, device, 50);
-  assert.equal(payload.seg[0].fx, 1); assert.equal(payload.seg[0].pal, 0); // Predeterminado
+  assert.equal(payload.seg[0].fx, 1);
+  assert.equal(payload.seg[0].pal, 0); // Predeterminado
   assert.deepEqual(payload.seg[0].col[1], [0, 0, 0]);
   const restored = sceneFromDevice({ ...device, state: payload });
   assert.equal(restored.faces[0].effect, 'fireworks');

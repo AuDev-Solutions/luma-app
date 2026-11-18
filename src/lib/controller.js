@@ -13,6 +13,15 @@ export const AUTO_PRESET = 249;
 export const APPLIED_PRESET = 248;
 const RESERVED = [OFF_PRESET, AUTO_PRESET, APPLIED_PRESET];
 
+// presets.json is read, changed and uploaded whole: two writes at once (saving a scene while the boot
+// scene is being kept) would each upload their own copy and one change would be lost. One at a time.
+let presetQueue = Promise.resolve();
+function oneAtATime(task) {
+  const run = presetQueue.then(task, task);
+  presetQueue = run.catch(() => {});
+  return run;
+}
+
 export async function readPresets(address) {
   const data = await request(address, '/presets.json');
   return data && typeof data === 'object' ? data : {};
@@ -20,8 +29,20 @@ export async function readPresets(address) {
 
 export function listScenes(presets) {
   return Object.entries(presets)
-    .filter(([id, preset]) => Number(id) > 0 && !RESERVED.includes(Number(id)) && preset && typeof preset === 'object' && Object.keys(preset).length)
-    .map(([id, preset]) => ({ id: Number(id), name: preset.n || `Escena ${id}`, scene: preset.luma || null, playlist: !!preset.playlist }))
+    .filter(
+      ([id, preset]) =>
+        Number(id) > 0 &&
+        !RESERVED.includes(Number(id)) &&
+        preset &&
+        typeof preset === 'object' &&
+        Object.keys(preset).length,
+    )
+    .map(([id, preset]) => ({
+      id: Number(id),
+      name: preset.n || `Escena ${id}`,
+      scene: preset.luma || null,
+      playlist: !!preset.playlist,
+    }))
     .sort((a, b) => a.id - b.id);
 }
 
@@ -40,28 +61,32 @@ async function writePresets(address, presets) {
 
 // A scene preset stores the exact state LUMA would send plus the editable scene under `luma`
 // (unknown keys are ignored by WLED when the preset is applied).
-export async function saveScenePreset(address, { id, name, payload, scene }) {
-  const presets = await readPresets(address);
-  const target = id ?? freePresetId(presets);
-  if (!target) throw new Error('El poste ya tiene el máximo de escenas guardadas. Elimina una para guardar otra.');
-  const { v, ...state } = payload;
-  presets[target] = { n: name.slice(0, 32), ...state, luma: scene };
-  await writePresets(address, presets);
-  return target;
-}
+export const saveScenePreset = (address, { id, name, payload, scene }) =>
+  oneAtATime(async () => {
+    const presets = await readPresets(address);
+    const target = id ?? freePresetId(presets);
+    if (!target) throw new Error('El poste ya tiene el máximo de escenas guardadas. Elimina una para guardar otra.');
+    const { v, ...state } = payload;
+    presets[target] = { n: name.slice(0, 32), ...state, luma: scene };
+    await writePresets(address, presets);
+    return target;
+  });
 
-export async function deletePreset(address, id) {
-  const presets = await readPresets(address);
-  delete presets[id];
-  await writePresets(address, presets);
-}
+export const deletePreset = (address, id) =>
+  oneAtATime(async () => {
+    const presets = await readPresets(address);
+    delete presets[id];
+    await writePresets(address, presets);
+  });
 
 // Always stored switched on, so the schedule's «encender» really turns the lights on.
 export async function rememberAppliedScene(address, { payload, scene }, config) {
-  const presets = await readPresets(address);
-  const { v, ...state } = payload;
-  presets[APPLIED_PRESET] = { n: 'Escena aplicada', ...state, on: true, luma: scene };
-  await writePresets(address, presets);
+  await oneAtATime(async () => {
+    const presets = await readPresets(address);
+    const { v, ...state } = payload;
+    presets[APPLIED_PRESET] = { n: 'Escena aplicada', ...state, on: true, luma: scene };
+    await writePresets(address, presets);
+  });
   if (config?.def?.ps !== APPLIED_PRESET) await setBootPreset(address, APPLIED_PRESET);
 }
 
@@ -70,9 +95,22 @@ export const applyPreset = (address, id) => request(address, '/json/state', { ps
 // Automatic mode: WLED playlist cycling the chosen scenes. Durations are in tenths of a second.
 export async function saveAutoMode(address, { ids, minutes, transition = 0.7 }) {
   if (ids.length < 2) throw new Error('Elige al menos dos escenas para el modo automático.');
-  const presets = await readPresets(address);
-  presets[AUTO_PRESET] = { n: 'Modo automático', on: true, playlist: { ps: ids, dur: ids.map(() => Math.round(minutes * 600)), transition: ids.map(() => Math.round(transition * 10)), repeat: 0, end: 0, r: false } };
-  await writePresets(address, presets);
+  await oneAtATime(async () => {
+    const presets = await readPresets(address);
+    presets[AUTO_PRESET] = {
+      n: 'Modo automático',
+      on: true,
+      playlist: {
+        ps: ids,
+        dur: ids.map(() => Math.round(minutes * 600)),
+        transition: ids.map(() => Math.round(transition * 10)),
+        repeat: 0,
+        end: 0,
+        r: false,
+      },
+    };
+    await writePresets(address, presets);
+  });
   await applyPreset(address, AUTO_PRESET);
 }
 
@@ -81,7 +119,8 @@ export async function saveAutoMode(address, { ids, minutes, transition = 0.7 }) 
 // The phone's UTC offset goes with it (fixed offset, tz 0) so the pole shows and schedules local time.
 export const localOffsetSeconds = () => -new Date().getTimezoneOffset() * 60;
 export async function syncClock(address, config) {
-  if (config?.if?.ntp?.offset !== localOffsetSeconds() || (config?.if?.ntp?.tz ?? 0) !== 0) await request(address, '/json/cfg', { if: { ntp: { tz: 0, offset: localOffsetSeconds() } } });
+  if (config?.if?.ntp?.offset !== localOffsetSeconds() || (config?.if?.ntp?.tz ?? 0) !== 0)
+    await request(address, '/json/cfg', { if: { ntp: { tz: 0, offset: localOffsetSeconds() } } });
   await request(address, '/json/state', { time: Math.floor(Date.now() / 1000) });
 }
 
@@ -95,17 +134,37 @@ export function clockStatus(info) {
 export function scheduleTimers({ onPreset, onMode, onTime, sunsetOffset, offEnabled, offTime }) {
   const [onHour, onMinute] = onTime.split(':').map(Number);
   const [offHour, offMinute] = offTime.split(':').map(Number);
-  const timers = [{ en: 1, hour: onMode === 'sunset' ? 254 : onHour, min: onMode === 'sunset' ? Math.max(-120, Math.min(120, sunsetOffset)) : onMinute, macro: onPreset, dow: 127 }];
+  const timers = [
+    {
+      en: 1,
+      hour: onMode === 'sunset' ? 254 : onHour,
+      min: onMode === 'sunset' ? Math.max(-120, Math.min(120, sunsetOffset)) : onMinute,
+      macro: onPreset,
+      dow: 127,
+    },
+  ];
   if (offEnabled) timers.push({ en: 1, hour: offHour, min: offMinute, macro: OFF_PRESET, dow: 127 });
   return timers;
 }
 
 export async function saveSchedule(address, schedule) {
-  const presets = await readPresets(address);
-  if (!presets[OFF_PRESET]) { presets[OFF_PRESET] = { n: 'Apagar', on: false }; await writePresets(address, presets); }
+  await oneAtATime(async () => {
+    const presets = await readPresets(address);
+    if (!presets[OFF_PRESET]) {
+      presets[OFF_PRESET] = { n: 'Apagar', on: false };
+      await writePresets(address, presets);
+    }
+  });
   // Fixed UTC offset (tz 0 + offset) avoids depending on WLED's short list of named time zones.
   await request(address, '/json/cfg', {
-    if: { ntp: { en: true, tz: 0, offset: schedule.utcOffsetSeconds, ...(schedule.onMode === 'sunset' ? { lt: schedule.latitude, ln: schedule.longitude } : {}) } },
+    if: {
+      ntp: {
+        en: true,
+        tz: 0,
+        offset: schedule.utcOffsetSeconds,
+        ...(schedule.onMode === 'sunset' ? { lt: schedule.latitude, ln: schedule.longitude } : {}),
+      },
+    },
     timers: { ins: scheduleTimers(schedule) },
   });
   await request(address, '/json/state', { time: Math.floor(Date.now() / 1000) });
@@ -139,17 +198,19 @@ export function powerStatus(info, config) {
   const outputs = config?.hw?.led?.ins ?? [];
   const bus = outputs[0];
   // Several outputs share the global limit; a single output carries its own.
-  const limit = outputs.length > 1 ? config?.hw?.led?.maxpwr ?? 0 : bus?.maxpwr || config?.hw?.led?.maxpwr || 0;
+  const limit = outputs.length > 1 ? (config?.hw?.led?.maxpwr ?? 0) : bus?.maxpwr || config?.hw?.led?.maxpwr || 0;
   return { estimate: info?.leds?.pwr ?? 0, limit, perLed: bus?.ledma ?? 55 };
 }
 
 export async function setCurrentLimit(address, milliamps) {
   const config = await request(address, '/json/cfg');
   const outputs = config?.hw?.led?.ins;
-  if (!Array.isArray(outputs) || !outputs.length) throw new Error('El controlador no tiene salidas de LEDs configuradas.');
+  if (!Array.isArray(outputs) || !outputs.length)
+    throw new Error('El controlador no tiene salidas de LEDs configuradas.');
   // One output: its own limit. One output per face: a single limit for the whole supply and the
   // per-output limits off (bus maxpwr 0 = WLED's global limiter). Each bus keeps its driver (face B on I2S).
-  const ins = outputs.length === 1 ? [{ ...outputs[0], maxpwr: milliamps }] : outputs.map(bus => ({ ...bus, maxpwr: 0 }));
+  const ins =
+    outputs.length === 1 ? [{ ...outputs[0], maxpwr: milliamps }] : outputs.map(bus => ({ ...bus, maxpwr: 0 }));
   await request(address, '/json/cfg', { hw: { led: { maxpwr: milliamps, ins } } });
 }
 
@@ -159,7 +220,11 @@ export async function setCurrentLimit(address, milliamps) {
 const NO_HOME_NETWORK = 'Your_Network';
 export function networkStatus(config) {
   const home = config?.nw?.ins?.[0]?.ssid || '';
-  return { apName: config?.ap?.ssid || '', alwaysOn: config?.ap?.behav === 2, homeNetwork: home && home !== NO_HOME_NETWORK ? home : '' };
+  return {
+    apName: config?.ap?.ssid || '',
+    alwaysOn: config?.ap?.behav === 2,
+    homeNetwork: home && home !== NO_HOME_NETWORK ? home : '',
+  };
 }
 export function standaloneNetworkError({ name, password }) {
   if (!name.trim() || name.trim().length > 32) return 'El nombre de la red debe tener entre 1 y 32 caracteres.';
@@ -178,5 +243,9 @@ export async function setStandaloneNetwork(address, { name, password, keepHome }
 }
 
 export function securityStatus(config) {
-  return { apPassword: (config?.ap?.pskl ?? 0) > 0, apDefault: (config?.ap?.pskl ?? 0) === 8, otaLocked: !!config?.ota?.lock };
+  return {
+    apPassword: (config?.ap?.pskl ?? 0) > 0,
+    apDefault: (config?.ap?.pskl ?? 0) === 8,
+    otaLocked: !!config?.ota?.lock,
+  };
 }

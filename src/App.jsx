@@ -9,26 +9,79 @@ import SaveModal from './components/SaveModal.jsx';
 import SettingsModal from './components/SettingsModal.jsx';
 import { prepareScene, toPole, fromPole, segmentError, defaultSegments } from './lib/segments.js';
 import { effectById, initialScene, readSavedScenes, presetFace } from './lib/scenes.js';
-import { applyWled, connectWled, sceneFromDevice, setLedCount, copyFaceB, sendScene, presetPayload, request, setSettingsPin, PinRequiredError } from './lib/wled.js';
-import { readPresets, listScenes, rememberAppliedScene, APPLIED_PRESET, saveScenePreset, deletePreset, applyPreset, saveAutoMode, syncClock, clockStatus, saveSchedule, clearSchedule, setBootPreset, setCurrentLimit, setStandaloneNetwork, localOffsetSeconds } from './lib/controller.js';
+import {
+  applyWled,
+  connectWled,
+  sceneFromDevice,
+  setLedCount,
+  copyFaceB,
+  sendScene,
+  presetPayload,
+  request,
+  setSettingsPin,
+  PinRequiredError,
+} from './lib/wled.js';
+import {
+  readPresets,
+  listScenes,
+  rememberAppliedScene,
+  APPLIED_PRESET,
+  saveScenePreset,
+  deletePreset,
+  applyPreset,
+  saveAutoMode,
+  syncClock,
+  clockStatus,
+  saveSchedule,
+  clearSchedule,
+  setBootPreset,
+  setCurrentLimit,
+  setStandaloneNetwork,
+  localOffsetSeconds,
+} from './lib/controller.js';
 import { subscribeLivePreview } from './lib/live-preview.js';
 import { mountById, mountFor, supportedTotals, copiedOutputs } from './lib/mounts.js';
 
-const readSetting = (key, fallback) => { try { return localStorage.getItem(key) ?? fallback; } catch { return fallback; } };
-const writeSetting = (key, value) => { try { localStorage.setItem(key, value); } catch { /* per-browser convenience only */ } };
+const readSetting = (key, fallback) => {
+  try {
+    return localStorage.getItem(key) ?? fallback;
+  } catch {
+    return fallback;
+  }
+};
+const writeSetting = (key, value) => {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* per-browser convenience only */
+  }
+};
 // Served from the pole itself (http://4.3.2.1/ or http://<pole>/luma.htm): the pole is this page's own origin.
 // The pole serves on port 80; the dev and preview servers always use another port.
-const servedFromPole = () => location.protocol === 'http:' && !location.port && (/luma/i.test(location.pathname) || location.pathname === '/' || /index\.htm/i.test(location.pathname));
+const servedFromPole = () =>
+  location.protocol === 'http:' &&
+  !location.port &&
+  (/luma/i.test(location.pathname) || location.pathname === '/' || /index\.htm/i.test(location.pathname));
 const HISTORY_LIMIT = 60;
+// Edits settle for this long before the scene is written to the pole's flash as its boot scene.
+const REMEMBER_DELAY = 8000;
 
 export default function App() {
-  const [mountId, setMountId] = useState(() => mountById(readSetting('luma-mount', 'face-100')) ? readSetting('luma-mount', 'face-100') : 'face-100');
+  const [mountId, setMountId] = useState(() =>
+    mountById(readSetting('luma-mount', 'face-100')) ? readSetting('luma-mount', 'face-100') : 'face-100',
+  );
   const mount = mountById(mountId);
+  // Connecting reads the pole in several steps; each step needs the mount chosen so far, not the one
+  // from the render the handler was created in.
+  const mountRef = useRef(mountId);
+  mountRef.current = mountId;
   const { count, faceCount, total: mountTotal } = mount;
   // Two faces always show the same thing: the editor works on one face and LUMA copies it to the other.
   const editorTotal = faceCount === 2 ? count : mountTotal;
   const [faceBFromTop, setFaceBFromTop] = useState(() => readSetting('luma-face-b-top', 'true') === 'true');
-  const [scene, setSceneState] = useState(() => prepareScene(initialScene, mount.faceCount === 2 ? mount.count : mount.total, 1));
+  const [scene, setSceneState] = useState(() =>
+    prepareScene(initialScene, mount.faceCount === 2 ? mount.count : mount.total, 1),
+  );
   // Like WLED, edits go to the selected segment; «Todos» is an explicit choice.
   const [target, setTarget] = useState(0);
   const [device, setDevice] = useState(null);
@@ -73,46 +126,90 @@ export default function App() {
     const from = direction === 'back' ? past : future;
     if (!from.length) return;
     const target = from[from.length - 1];
-    if (direction === 'back') { history.current.past = past.slice(0, -1); history.current.future = [...future, sceneRef.current]; }
-    else { history.current.future = future.slice(0, -1); history.current.past = [...past, sceneRef.current]; }
+    if (direction === 'back') {
+      history.current.past = past.slice(0, -1);
+      history.current.future = [...future, sceneRef.current];
+    } else {
+      history.current.future = future.slice(0, -1);
+      history.current.past = [...past, sceneRef.current];
+    }
     history.current.last = 0;
-    sceneRef.current = target; setSceneState(target);
-    setTarget(current => current === 'all' || target.segments.some(item => item.id === current) ? current : target.segments[0].id);
+    sceneRef.current = target;
+    setSceneState(target);
+    setTarget(current =>
+      current === 'all' || target.segments.some(item => item.id === current) ? current : target.segments[0].id,
+    );
     setHistorySize({ past: history.current.past.length, future: history.current.future.length });
   }
   useEffect(() => {
     function onKey(event) {
-      if (!(event.ctrlKey || event.metaKey) || event.target.closest('input[type=text], input[type=number], input:not([type]), textarea')) return;
+      if (
+        !(event.ctrlKey || event.metaKey) ||
+        event.target.closest('input[type=text], input[type=number], input:not([type]), textarea')
+      )
+        return;
       const key = event.key.toLowerCase();
-      if (key === 'z' && !event.shiftKey) { event.preventDefault(); travel('back'); }
-      else if (key === 'y' || (key === 'z' && event.shiftKey)) { event.preventDefault(); travel('forward'); }
+      if (key === 'z' && !event.shiftKey) {
+        event.preventDefault();
+        travel('back');
+      } else if (key === 'y' || (key === 'z' && event.shiftKey)) {
+        event.preventDefault();
+        travel('forward');
+      }
     }
     addEventListener('keydown', onKey);
     return () => removeEventListener('keydown', onKey);
   }, []);
 
-  function openPreview(event) { previewTrigger.current = event.currentTarget; setPreviewExpanded(true); }
-  function closePreview() { setPreviewExpanded(false); requestAnimationFrame(() => previewTrigger.current?.focus({ preventScroll: true })); }
+  function openPreview(event) {
+    previewTrigger.current = event.currentTarget;
+    setPreviewExpanded(true);
+  }
+  function closePreview() {
+    setPreviewExpanded(false);
+    requestAnimationFrame(() => previewTrigger.current?.focus({ preventScroll: true }));
+  }
   useEffect(() => {
     liveFrame.current = null;
     if (!device) return;
     let checking = false;
     // The pole was reconfigured elsewhere: read it again before any live edit sends the old layout.
     const resized = () => {
-      if (checking) return; checking = true;
-      connectWled(device.address).then(connected => {
-        if (connected.count === device.count) return;
-        adopt(connected); notify(`El poste ahora tiene ${connected.count} LEDs. LUMA se ajustó.`);
-      }).catch(() => {}).finally(() => { checking = false; });
+      if (checking) return;
+      checking = true;
+      connectWled(device.address)
+        .then(connected => {
+          if (connected.count === device.count) return;
+          adopt(connected);
+          notify(`El poste ahora tiene ${connected.count} LEDs. LUMA se ajustó.`);
+        })
+        .catch(() => {})
+        .finally(() => {
+          checking = false;
+        });
     };
-    return subscribeLivePreview(device.address, device.count, frame => { liveFrame.current = frame; }, setLiveStatus, resized);
+    return subscribeLivePreview(
+      device.address,
+      device.count,
+      frame => {
+        liveFrame.current = frame;
+      },
+      setLiveStatus,
+      resized,
+    );
   }, [device?.address, device?.count, liveAttempt]);
 
   const targetIndex = scene.segments.findIndex(item => item.id === target);
   const face = scene.faces[Math.max(0, targetIndex)];
   // With a single segment there is nothing to choose: hide segment wording entirely.
-  const targetName = scene.segments.length === 1 ? null : target === 'all' || targetIndex < 0 ? 'Todos los segmentos' : scene.segments[targetIndex].name || `Segmento ${target + 1}`;
-  const segmentLimit = device?.maxSegments && faceCount === 2 ? Math.floor(device.maxSegments / 2) : device?.maxSegments;
+  const targetName =
+    scene.segments.length === 1
+      ? null
+      : target === 'all' || targetIndex < 0
+        ? 'Todos los segmentos'
+        : scene.segments[targetIndex].name || `Segmento ${target + 1}`;
+  const segmentLimit =
+    device?.maxSegments && faceCount === 2 ? Math.floor(device.maxSegments / 2) : device?.maxSegments;
   const layoutError = segmentError(scene, editorTotal, segmentLimit);
   const forPole = editing => toPole(editing, faceCount, faceBFromTop);
   const poleScene = forPole(scene);
@@ -126,59 +223,122 @@ export default function App() {
     });
   }
   useEffect(() => () => clearTimeout(timerRef.current), []);
-  const notify = (message, type = 'success') => { clearTimeout(timerRef.current); setToast({ message, type }); if (type !== 'error') timerRef.current = setTimeout(() => setToast(null), 6000); };
-  const openModal = name => { setError(''); setModal(name); };
-  const closeModal = () => { connectAttempt.current++; setModal(null); setError(''); setBusy(false); };
+  const notify = (message, type = 'success') => {
+    clearTimeout(timerRef.current);
+    setToast({ message, type });
+    if (type !== 'error') timerRef.current = setTimeout(() => setToast(null), 6000);
+  };
+  const openModal = name => {
+    setError('');
+    setModal(name);
+  };
+  const closeModal = () => {
+    connectAttempt.current++;
+    setModal(null);
+    setError('');
+    setBusy(false);
+  };
   // Pole operations share busy state and error reporting; a missing PIN opens the settings.
   async function run(task, success) {
-    setBusy(true); setError('');
-    try { const result = await task(); if (success) notify(success); return result ?? true; }
-    catch (failure) {
-      if (failure instanceof PinRequiredError) { openModal('settings'); setError(failure.message); }
-      else if (modal) setError(failure.message); else notify(failure.message, 'error');
+    setBusy(true);
+    setError('');
+    try {
+      const result = await task();
+      if (success) notify(success);
+      return result ?? true;
+    } catch (failure) {
+      if (failure instanceof PinRequiredError) {
+        openModal('settings');
+        setError(failure.message);
+      } else if (modal) setError(failure.message);
+      else notify(failure.message, 'error');
       return false;
+    } finally {
+      setBusy(false);
     }
-    finally { setBusy(false); }
   }
 
   function selectMount(id, nextScene) {
     const selected = mountById(id);
-    const next = nextScene || prepareScene({ ...sceneRef.current, segments: undefined }, selected.faceCount === 2 ? selected.count : selected.total, 1);
+    const next =
+      nextScene ||
+      prepareScene(
+        { ...sceneRef.current, segments: undefined },
+        selected.faceCount === 2 ? selected.count : selected.total,
+        1,
+      );
     // A loaded scene with several parts is edited as a whole until one part is picked.
-    setMountId(id); writeSetting('luma-mount', id); setTarget(next.segments.length > 1 ? 'all' : next.segments[0].id); setScene(next);
+    mountRef.current = id;
+    setMountId(id);
+    writeSetting('luma-mount', id);
+    setTarget(next.segments.length > 1 ? 'all' : next.segments[0].id);
+    setScene(next);
   }
   function loadIntoEditor(saved, message) {
-    let next = structuredClone(saved), total = next.total || editorTotal;
+    let next = structuredClone(saved),
+      total = next.total || editorTotal;
     // A scene saved for the whole two-face pole is read as one face; with copied faces the controller
     // shows only that face, repeated on both sides.
-    if ((faceCount === 2 && total === mountTotal) || (mount.copiedFaces && total === 2 * editorTotal)) { next = fromPole(prepareScene(next, total, 2), 2); total = editorTotal; }
+    if ((faceCount === 2 && total === mountTotal) || (mount.copiedFaces && total === 2 * editorTotal)) {
+      next = fromPole(prepareScene(next, total, 2), 2);
+      total = editorTotal;
+    }
     if (total === editorTotal) selectMount(mountId, prepareScene(next, total, 1));
-    else if (device) { notify(`Esta escena tiene ${total} LEDs y el poste ${mountTotal}.`, 'error'); return; }
-    else { const fit = mountFor(total, mountId); selectMount(fit.id, fit.faceCount === 2 ? fromPole(prepareScene(next, total, 2), 2) : prepareScene(next, total, 1)); }
+    else if (device) {
+      notify(`Esta escena tiene ${total} LEDs y el poste ${mountTotal}.`, 'error');
+      return;
+    } else {
+      const fit = mountFor(total, mountId);
+      selectMount(
+        fit.id,
+        fit.faceCount === 2 ? fromPole(prepareScene(next, total, 2), 2) : prepareScene(next, total, 1),
+      );
+    }
     if (message) notify(message);
   }
 
   // ——— Connection
   async function refreshPole(address) {
-    const [presets, config] = await Promise.all([readPresets(address).catch(() => ({})), request(address, '/json/cfg').catch(() => null)]);
-    setPoleScenes(listScenes(presets)); setPoleConfig(config);
+    const [presets, config] = await Promise.all([
+      readPresets(address).catch(() => ({})),
+      request(address, '/json/cfg').catch(() => null),
+    ]);
+    setPoleScenes(listScenes(presets));
+    setPoleConfig(config);
     return config;
   }
   // `detected` comes from the controller's outputs when they were just read; otherwise from the last read.
   function adopt(connected, detected) {
     const known = poleConfigRef.current;
-    detected ||= mountFor(connected.count, mountId, known?.hw?.led?.ins?.length ?? 1, known ? copiedOutputs(known) : undefined);
-    if (!detected) throw new Error(`El poste tiene ${connected.count} LEDs configurados y LUMA admite ${supportedTotals.join(', ')}. Corrígelo en ${connected.address}/settings/leds: el total es el inicio más la longitud de la última salida (dos caras: inicio 0 y 100, longitud 100 cada una).`);
-    setDevice(connected); lastLayout.current = null;
+    detected ||= mountFor(
+      connected.count,
+      mountRef.current,
+      known?.hw?.led?.ins?.length ?? 1,
+      known ? copiedOutputs(known) : undefined,
+    );
+    if (!detected)
+      throw new Error(
+        `El poste tiene ${connected.count} LEDs configurados y LUMA admite ${supportedTotals.join(', ')}. Corrígelo en ${connected.address}/settings/leds: el total es el inicio más la longitud de la última salida (dos caras: inicio 0 y 100, longitud 100 cada una).`,
+      );
+    setDevice(connected);
+    lastLayout.current = null;
+    lastRemembered.current = '';
     const shown = fromPole(sceneFromDevice(connected), detected.faceCount);
-    selectMount(detected.id, shown || prepareScene(initialScene, detected.faceCount === 2 ? detected.count : connected.count, 1));
+    selectMount(
+      detected.id,
+      shown || prepareScene(initialScene, detected.faceCount === 2 ? detected.count : connected.count, 1),
+    );
     // What the pole already shows is not sent back to it, unless its faces still differ from LUMA's layout.
     const ranges = list => JSON.stringify(list.map(item => [item.start, item.stop]));
-    const same = ranges(connected.state.seg.filter(item => item.stop > item.start)) === ranges(toPole(sceneRef.current, detected.faceCount, faceBFromTop).segments);
+    const same =
+      ranges(connected.state.seg.filter(item => item.stop > item.start)) ===
+      ranges(toPole(sceneRef.current, detected.faceCount, faceBFromTop).segments);
     syncedScene.current = shown && same ? sceneRef.current : null;
   }
   async function connectTo(value, { silent = false } = {}) {
-    setBusy(true); setError(''); const attempt = ++connectAttempt.current;
+    setBusy(true);
+    setError('');
+    const attempt = ++connectAttempt.current;
     try {
       let connected = await connectWled(value);
       if (attempt !== connectAttempt.current) return;
@@ -186,58 +346,133 @@ export default function App() {
       const outputs = config?.hw?.led?.ins?.length ?? 1;
       // Each face on its own data pin: face B's output repeats face A's, so both faces show exactly the
       // same in every effect. Separate segments would draw random effects differently on each face.
-      let copyFailure = '', copiedNow = false;
+      let copyFailure = '',
+        copiedNow = false;
       if (outputs === 2 && !copiedOutputs(config)) {
         try {
           copiedNow = await copyFaceB(connected.address);
-          connected = await connectWled(connected.address); config = await refreshPole(connected.address);
-        } catch (failure) { copyFailure = failure.message; }
+          connected = await connectWled(connected.address);
+          config = await refreshPole(connected.address);
+        } catch (failure) {
+          copyFailure = failure.message;
+        }
       }
       if (attempt !== connectAttempt.current) return;
       // Each face on its own data pin starts at the bottom: no continuous cable up to face B.
-      if (outputs === 2) { setFaceBFromTop(false); writeSetting('luma-face-b-top', 'false'); }
-      adopt(connected, mountFor(connected.count, mountId, outputs, copiedOutputs(config))); setModal(null);
+      if (outputs === 2) {
+        setFaceBFromTop(false);
+        writeSetting('luma-face-b-top', 'false');
+      }
+      adopt(connected, mountFor(connected.count, mountRef.current, outputs, copiedOutputs(config)));
+      setModal(null);
       // The boot scene was saved for separate faces: send the scene again so it is kept for the new layout.
       if (copiedNow) syncedScene.current = null;
-      writeSetting('luma-address', value); writeSetting('luma-autoconnect', 'true');
+      writeSetting('luma-address', value);
+      writeSetting('luma-autoconnect', 'true');
       // No battery-backed clock: give the pole this phone's time so schedules work offline.
       if (!clockStatus(connected.info).valid) await syncClock(connected.address, config).catch(() => {});
-      if (copyFailure) notify(`Conectado a ${connected.name}, pero la cara B no quedó copiando a la cara A: ${copyFailure}`, 'error');
-      else notify(copiedNow ? `Conectado a ${connected.name}. La cara B ahora repite la cara A en todos los efectos.` : `Conectado a ${connected.name}.`);
-    } catch (failure) { if (attempt === connectAttempt.current && !silent) setError(failure.message); else if (silent) notify(failure instanceof TypeError || failure.name === 'TimeoutError' || failure.name === 'AbortError' ? 'No se encontró el poste guardado. Conéctalo desde «Conectar poste».' : failure.message, 'error'); }
-    finally { if (attempt === connectAttempt.current) setBusy(false); }
+      if (copyFailure)
+        notify(`Conectado a ${connected.name}, pero la cara B no quedó copiando a la cara A: ${copyFailure}`, 'error');
+      else
+        notify(
+          copiedNow
+            ? `Conectado a ${connected.name}. La cara B ahora repite la cara A en todos los efectos.`
+            : `Conectado a ${connected.name}.`,
+        );
+    } catch (failure) {
+      if (attempt === connectAttempt.current && !silent) setError(failure.message);
+      else if (silent)
+        notify(
+          failure instanceof TypeError || failure.name === 'TimeoutError' || failure.name === 'AbortError'
+            ? 'No se encontró el poste guardado. Conéctalo desde «Conectar poste».'
+            : failure.message,
+          'error',
+        );
+    } finally {
+      if (attempt === connectAttempt.current) setBusy(false);
+    }
   }
   useEffect(() => {
-    if (servedFromPole()) { setAddress(location.host); connectTo(location.origin, { silent: true }); }
-    else if (readSetting('luma-autoconnect', '') === 'true' && readSetting('luma-address', '')) connectTo(readSetting('luma-address', ''), { silent: true });
+    if (servedFromPole()) {
+      setAddress(location.host);
+      connectTo(location.origin, { silent: true });
+    } else if (readSetting('luma-autoconnect', '') === 'true' && readSetting('luma-address', ''))
+      connectTo(readSetting('luma-address', ''), { silent: true });
   }, []);
   function disconnect() {
-    setDevice(null); setPoleScenes([]); setPoleConfig(null);
-    writeSetting('luma-autoconnect', 'false'); closeModal();
+    setDevice(null);
+    setPoleScenes([]);
+    setPoleConfig(null);
+    writeSetting('luma-autoconnect', 'false');
+    closeModal();
     notify('Modo demostración activado. El poste conserva su último estado.');
   }
-  const redetect = () => run(async () => { const connected = await connectWled(device.address); adopt(connected); await refreshPole(connected.address); }, 'Lectura del poste actualizada.');
-  const changeLedCount = total => run(async () => { await setLedCount(device.address, total); adopt(await connectWled(device.address)); }, `El poste ahora controla ${total} LEDs en el mismo pin de datos.`);
-  const changeCurrentLimit = milliamps => run(async () => { await setCurrentLimit(device.address, milliamps); adopt(await connectWled(device.address)); await refreshPole(device.address); }, `Límite de corriente: ${(milliamps / 1000).toLocaleString('es')} A.`);
+  const redetect = () =>
+    run(async () => {
+      const connected = await connectWled(device.address);
+      adopt(connected);
+      await refreshPole(connected.address);
+    }, 'Lectura del poste actualizada.');
+  const outputCount = poleConfig?.hw?.led?.ins?.length ?? 1;
+  const changeLedCount = total =>
+    run(
+      async () => {
+        await setLedCount(device.address, total);
+        adopt(await connectWled(device.address));
+        await refreshPole(device.address);
+      },
+      outputCount === 1
+        ? `El poste ahora controla ${total} LEDs en el mismo pin de datos.`
+        : `El poste ahora controla ${total / outputCount} LEDs por salida de datos.`,
+    );
+  const changeCurrentLimit = milliamps =>
+    run(
+      async () => {
+        await setCurrentLimit(device.address, milliamps);
+        adopt(await connectWled(device.address));
+        await refreshPole(device.address);
+      },
+      `Límite de corriente: ${(milliamps / 1000).toLocaleString('es')} A.`,
+    );
   // After this the pole restarts on its own network: this app loses it until the phone joins that network.
   async function changeNetwork(settings) {
     const done = await run(() => setStandaloneNetwork(device.address, settings));
     if (!done) return false;
-    if (!settings.keepHome) { setAddress('4.3.2.1'); writeSetting('luma-address', '4.3.2.1'); }
-    setDevice(null); setPoleScenes([]); setPoleConfig(null);
+    if (!settings.keepHome) {
+      setAddress('4.3.2.1');
+      writeSetting('luma-address', '4.3.2.1');
+    }
+    setDevice(null);
+    setPoleScenes([]);
+    setPoleConfig(null);
     return true;
   }
-  function setPin(value) { setPinState(value); setSettingsPin(value); }
+  function setPin(value) {
+    setPinState(value);
+    setSettingsPin(value);
+  }
 
   // ——— Editing
-  function updateFace(patch) { updateScene(current => ({ ...current, faces: current.faces.map((item, index) => (target === 'all' || current.segments[index].id === target) ? { ...item, ...patch } : item) })); }
+  function updateFace(patch) {
+    updateScene(current => ({
+      ...current,
+      faces: current.faces.map((item, index) =>
+        target === 'all' || current.segments[index].id === target ? { ...item, ...patch } : item,
+      ),
+    }));
+  }
   // Editing every part at once changes the movement, not the colours each part was given.
   function selectDesign(effect) {
     const { colors, ...design } = presetFace(effect);
     // Only parts that were given their own colours keep them (a pole split in 4); two faces with the same
     // design take the new design's colours.
     // Another design after a theme (a flag, Navidad…) replaces the theme on the whole pole.
-    if (scene.theme && target === 'all') { const { theme, ...rest } = scene; updateScene({ ...rest, segments: defaultSegments(rest.total), faces: [{ ...design, colors }] }); setTarget(0); return; }
+    if (scene.theme && target === 'all') {
+      const { theme, ...rest } = scene;
+      updateScene({ ...rest, segments: defaultSegments(rest.total), faces: [{ ...design, colors }] });
+      setTarget(0);
+      return;
+    }
     const ownColours = new Set(scene.faces.map(face => face.colors.join())).size > 1;
     updateFace(target === 'all' && ownColours && !effect.spectrum ? design : { ...design, colors });
   }
@@ -245,23 +480,59 @@ export default function App() {
   // ——— Sending to the pole
   const lastLayout = useRef(null);
   async function apply() {
-    if (layoutError) { notify(layoutError, 'error'); return; }
-    if (!device) { notify('Escena probada en el simulador. Conecta tu poste para enviarla a las luces.'); return; }
+    if (layoutError) {
+      notify(layoutError, 'error');
+      return;
+    }
+    if (!device) {
+      notify('Escena probada en el simulador. Conecta tu poste para enviarla a las luces.');
+      return;
+    }
     await run(async () => {
       const confirmed = await applyWled(poleScene, device, count, faceCount, target);
-      lastLayout.current = confirmed; syncedScene.current = sceneRef.current;
+      lastLayout.current = confirmed;
+      syncedScene.current = sceneRef.current;
       await remember(scene);
     }, 'Escena aplicada en el poste.');
   }
-  // What the pole shows is also kept as its boot scene and the schedule's default. Written a few
-  // seconds after the last change, so dragging a slider does not rewrite the flash on every step.
-  const poleConfigRef = useRef(poleConfig); poleConfigRef.current = poleConfig;
+  // What the pole shows is also kept as its boot scene and the schedule's default. Each write rewrites
+  // presets.json in the controller's flash, so it waits until the edits settle, skips a scene the pole
+  // already keeps, and happens at once when the app is closed or sent to the background.
+  const poleConfigRef = useRef(poleConfig);
+  poleConfigRef.current = poleConfig;
   const rememberTimer = useRef(null);
-  useEffect(() => () => clearTimeout(rememberTimer.current), []);
+  const pendingRemember = useRef(null);
+  const lastRemembered = useRef('');
+  useEffect(() => {
+    const onHide = event => {
+      if (event.type === 'pagehide' || document.visibilityState === 'hidden') pendingRemember.current?.();
+    };
+    document.addEventListener('visibilitychange', onHide);
+    addEventListener('pagehide', onHide);
+    return () => {
+      clearTimeout(rememberTimer.current);
+      document.removeEventListener('visibilitychange', onHide);
+      removeEventListener('pagehide', onHide);
+    };
+  }, []);
   async function remember(saved) {
     clearTimeout(rememberTimer.current);
-    await rememberAppliedScene(device.address, { payload: presetPayload(forPole(saved), device, count, faceCount), scene: saved }, poleConfigRef.current);
+    pendingRemember.current = null;
+    const payload = presetPayload(forPole(saved), device, count, faceCount);
+    const key = JSON.stringify(payload);
+    if (key === lastRemembered.current && poleConfigRef.current?.def?.ps === APPLIED_PRESET) return;
+    await rememberAppliedScene(device.address, { payload, scene: saved }, poleConfigRef.current);
+    lastRemembered.current = key;
     setPoleConfig(config => config && { ...config, def: { ...config.def, ps: APPLIED_PRESET } });
+  }
+  function rememberLater(saved) {
+    clearTimeout(rememberTimer.current);
+    const write = () =>
+      remember(saved).catch(failure =>
+        notify(`No se pudo guardar la escena de encendido: ${failure.message}`, 'error'),
+      );
+    pendingRemember.current = write;
+    rememberTimer.current = setTimeout(write, REMEMBER_DELAY);
   }
   // Always live while connected: every edit reaches the pole, throttled.
   const syncedScene = useRef(null);
@@ -271,9 +542,9 @@ export default function App() {
       if (scene === syncedScene.current) return; // already applied meanwhile
       sendScene(forPole(scene), { ...device, state: lastLayout.current || device.state }, count, faceCount, target)
         .then(payload => {
-          syncedScene.current = scene; lastLayout.current = { ...lastLayout.current, seg: payload.seg.filter(item => item.stop !== 0) };
-          clearTimeout(rememberTimer.current);
-          rememberTimer.current = setTimeout(() => remember(scene).catch(failure => notify(`No se pudo guardar la escena de encendido: ${failure.message}`, 'error')), 2500);
+          syncedScene.current = scene;
+          lastLayout.current = { ...lastLayout.current, seg: payload.seg.filter(item => item.stop !== 0) };
+          rememberLater(scene);
         })
         .catch(failure => notify(`No se pudo enviar el cambio: ${failure.message}`, 'error'));
     }, 180);
@@ -282,51 +553,267 @@ export default function App() {
 
   // ——— Saving
   async function save(name, onPole) {
-    if (layoutError) { setError(layoutError); return; }
-    if (savedScenes.length >= 12 && !onPole) { setError('Ya tienes 12 escenas en este teléfono. Elimina una desde Escenas para guardar otra.'); return; }
-    const item = { id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`, name, scene: structuredClone(scene) };
-    try { const next = [item, ...savedScenes].slice(0, 12); localStorage.setItem('luma-scenes', JSON.stringify(next)); setSavedScenes(next); }
-    catch { if (!onPole) { setError('El navegador no permitió guardar. Revisa que el almacenamiento local esté disponible.'); return; } }
+    if (layoutError) {
+      setError(layoutError);
+      return;
+    }
+    if (savedScenes.length >= 12 && !onPole) {
+      setError('Ya tienes 12 escenas en este teléfono. Elimina una desde Escenas para guardar otra.');
+      return;
+    }
+    const item = {
+      id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 9)}`,
+      name,
+      scene: structuredClone(scene),
+    };
+    try {
+      const next = [item, ...savedScenes].slice(0, 12);
+      localStorage.setItem('luma-scenes', JSON.stringify(next));
+      setSavedScenes(next);
+    } catch {
+      if (!onPole) {
+        setError('El navegador no permitió guardar. Revisa que el almacenamiento local esté disponible.');
+        return;
+      }
+    }
     if (onPole && device) {
-      const saved = await run(async () => { await saveScenePreset(device.address, { name, payload: presetPayload(forPole(scene), device, count, faceCount), scene }); await refreshPole(device.address); });
+      const saved = await run(async () => {
+        await saveScenePreset(device.address, {
+          name,
+          payload: presetPayload(forPole(scene), device, count, faceCount),
+          scene,
+        });
+        await refreshPole(device.address);
+      });
       if (!saved) return;
     }
-    setModal(null); notify(`“${name}” guardada${onPole && device ? ' en el poste y en este teléfono' : ' en este navegador'}.`);
+    setModal(null);
+    notify(`“${name}” guardada${onPole && device ? ' en el poste y en este teléfono' : ' en este navegador'}.`);
   }
   function removeScene(id) {
-    try { const next = savedScenes.filter(item => item.id !== id); localStorage.setItem('luma-scenes', JSON.stringify(next)); setSavedScenes(next); notify('Escena eliminada de este teléfono.'); }
-    catch { notify('No se pudo actualizar el almacenamiento del navegador.', 'error'); }
+    try {
+      const next = savedScenes.filter(item => item.id !== id);
+      localStorage.setItem('luma-scenes', JSON.stringify(next));
+      setSavedScenes(next);
+      notify('Escena eliminada de este teléfono.');
+    } catch {
+      notify('No se pudo actualizar el almacenamiento del navegador.', 'error');
+    }
   }
 
-  const scenesTab = <ScenesTab connected={!!device} busy={busy} device={device} poleScenes={poleScenes} poleConfig={poleConfig}
-    loadTheme={theme => loadIntoEditor({ ...theme.build(editorTotal), theme: theme.id }, `Tema «${theme.name}» ${device ? 'en el poste' : 'cargado en la vista previa'}.`)}
-    savedScenes={savedScenes} loadScene={saved => loadIntoEditor(saved, 'Escena cargada en la vista previa.')} removeScene={removeScene}
-    applyPoleScene={item => run(async () => { await applyPreset(device.address, item.id); lastLayout.current = null; syncedScene.current = sceneRef.current; }, `«${item.name}» en el poste.`)}
-    editPoleScene={item => loadIntoEditor(item.scene, `«${item.name}» cargada en el editor.`)}
-    deletePoleScene={item => run(async () => { await deletePreset(device.address, item.id); await refreshPole(device.address); }, `«${item.name}» eliminada del poste.`)}
-    setBootScene={id => run(async () => { await setBootPreset(device.address, id); await refreshPole(device.address); }, 'El poste mostrará esa escena al encender.')}
-    startAuto={(ids, minutes) => run(async () => { await saveAutoMode(device.address, { ids, minutes }); lastLayout.current = null; syncedScene.current = sceneRef.current; }, `Modo automático: cambia cada ${minutes} min.`)}
-    stopAuto={apply}
-    saveSchedule={form => run(async () => { await saveSchedule(device.address, { ...form, utcOffsetSeconds: localOffsetSeconds() }); await refreshPole(device.address); }, 'Horario guardado en el poste.')}
-    clearSchedule={() => run(async () => { await clearSchedule(device.address); await refreshPole(device.address); }, 'Horario eliminado.')}
-    syncClock={() => run(async () => { await syncClock(device.address, poleConfig); adopt(await connectWled(device.address)); await refreshPole(device.address); }, 'Hora del poste actualizada.')} />;
+  const scenesTab = (
+    <ScenesTab
+      connected={!!device}
+      busy={busy}
+      device={device}
+      poleScenes={poleScenes}
+      poleConfig={poleConfig}
+      loadTheme={theme =>
+        loadIntoEditor(
+          { ...theme.build(editorTotal), theme: theme.id },
+          `Tema «${theme.name}» ${device ? 'en el poste' : 'cargado en la vista previa'}.`,
+        )
+      }
+      savedScenes={savedScenes}
+      loadScene={saved => loadIntoEditor(saved, 'Escena cargada en la vista previa.')}
+      removeScene={removeScene}
+      applyPoleScene={item =>
+        run(async () => {
+          await applyPreset(device.address, item.id);
+          lastLayout.current = null;
+          syncedScene.current = sceneRef.current;
+        }, `«${item.name}» en el poste.`)
+      }
+      editPoleScene={item => loadIntoEditor(item.scene, `«${item.name}» cargada en el editor.`)}
+      deletePoleScene={item =>
+        run(async () => {
+          await deletePreset(device.address, item.id);
+          await refreshPole(device.address);
+        }, `«${item.name}» eliminada del poste.`)
+      }
+      setBootScene={id =>
+        run(async () => {
+          await setBootPreset(device.address, id);
+          await refreshPole(device.address);
+        }, 'El poste mostrará esa escena al encender.')
+      }
+      startAuto={(ids, minutes) =>
+        run(async () => {
+          await saveAutoMode(device.address, { ids, minutes });
+          lastLayout.current = null;
+          syncedScene.current = sceneRef.current;
+        }, `Modo automático: cambia cada ${minutes} min.`)
+      }
+      stopAuto={apply}
+      saveSchedule={form =>
+        run(async () => {
+          await saveSchedule(device.address, { ...form, utcOffsetSeconds: localOffsetSeconds() });
+          await refreshPole(device.address);
+        }, 'Horario guardado en el poste.')
+      }
+      clearSchedule={() =>
+        run(async () => {
+          await clearSchedule(device.address);
+          await refreshPole(device.address);
+        }, 'Horario eliminado.')
+      }
+      syncClock={() =>
+        run(async () => {
+          await syncClock(device.address, poleConfig);
+          adopt(await connectWled(device.address));
+          await refreshPole(device.address);
+        }, 'Hora del poste actualizada.')
+      }
+    />
+  );
 
-  return <div className="app-shell">
-    <header className="header"><a className="brand" href="./" aria-label="Luma, inicio"><span className="brand-mark"><i /><i /><i /></span>LUMA</a><span className="brand-description">Control de iluminación</span><div className="header-actions"><button className="settings-button" onClick={() => openModal('settings')} aria-label="Mi montaje"><SlidersHorizontal size={17} /><span>Mi montaje</span></button><button className="connect-button" onClick={() => openModal('connect')} title={device ? 'Conectado al poste' : 'Sin conexión: modo demostración'}><i className={`status-dot ${device ? 'on' : 'off'}`} aria-hidden="true" /><span>{device ? 'Conexión' : 'Conectar poste'}</span></button></div></header>
-    <main>
-      <div className="workspace">
-        <PolePreview expanded={previewExpanded} openPreview={openPreview} closePreview={closePreview} connected={!!device} liveFrame={liveFrame} liveStatus={liveStatus} retryLive={() => setLiveAttempt(value => value + 1)} scene={poleScene} count={count} faceCount={faceCount} copiedFaces={!!mount.copiedFaces} faceBFromTop={faceBFromTop} onPower={() => updateScene({ ...scene, on: !scene.on })} />
-        <SceneControls scene={scene} face={face} target={target} setTarget={setTarget} targetName={targetName} selectDesign={selectDesign} openPreview={openPreview} updateFace={updateFace} updateScene={updateScene}
-          segmentEditor={<SegmentEditor scene={scene} total={editorTotal} target={target} setTarget={setTarget} updateScene={updateScene} limit={segmentLimit} />}
-          scenesTab={scenesTab} invalid={!!layoutError} deviceEffects={device?.effects} apply={apply}
-          save={() => openModal('save')} busy={busy} connected={!!device}
-          undo={() => travel('back')} redo={() => travel('forward')} canUndo={historySize.past > 0} canRedo={historySize.future > 0} />
-      </div>
-    </main>
-    <footer><div className="pole-symbol" /><strong>{device?.name || 'Poste 01'}</strong><span className="footer-divider" /><span>{mount.name} · {mount.copiedFaces ? mountTotal * 2 : mountTotal} píxeles</span><span className="footer-divider" /><span>{mount.copiedFaces || faceCount === 2 ? `${count} por cara` : count === 100 ? 'Una cara' : 'Una tira'}</span><span className="footer-right">Diseñado para brillar.</span></footer>
-    {toast && <div role={toast.type === 'error' ? 'alert' : 'status'} className={`toast ${toast.type}`}><Check size={18} /><span>{toast.message}</span><button aria-label="Cerrar notificación" onClick={() => setToast(null)}>×</button></div>}
-    {modal === 'connect' && <ConnectModal device={device} address={address} setAddress={setAddress} busy={busy} error={error} connect={connectTo} disconnect={disconnect} close={closeModal} />}
-    {modal === 'save' && <SaveModal initialName={`${effectById(face.effect).name} ${savedScenes.length + poleScenes.length + 1}`} connected={!!device} busy={busy} error={error} save={save} close={closeModal} />}
-    {modal === 'settings' && <SettingsModal device={device} poleConfig={poleConfig} mountId={mountId} selectMount={selectMount} faceCount={faceCount} copiedFaces={!!mount.copiedFaces} faceBFromTop={faceBFromTop} setFaceBFromTop={value => { setFaceBFromTop(value); writeSetting('luma-face-b-top', String(value)); }} busy={busy} error={error} redetect={redetect} changeLedCount={changeLedCount} changeCurrentLimit={changeCurrentLimit} changeNetwork={changeNetwork} pin={pin} setPin={setPin} close={closeModal} />}
-  </div>;
+  return (
+    <div className="app-shell">
+      <header className="header">
+        <a className="brand" href="./" aria-label="Luma, inicio">
+          <span className="brand-mark">
+            <i />
+            <i />
+            <i />
+          </span>
+          LUMA
+        </a>
+        <span className="brand-description">Control de iluminación</span>
+        <div className="header-actions">
+          <button className="settings-button" onClick={() => openModal('settings')} aria-label="Mi montaje">
+            <SlidersHorizontal size={17} />
+            <span>Mi montaje</span>
+          </button>
+          <button
+            className="connect-button"
+            onClick={() => openModal('connect')}
+            title={device ? 'Conectado al poste' : 'Sin conexión: modo demostración'}
+          >
+            <i className={`status-dot ${device ? 'on' : 'off'}`} aria-hidden="true" />
+            <span>{device ? 'Conexión' : 'Conectar poste'}</span>
+          </button>
+        </div>
+      </header>
+      <main>
+        <div className="workspace">
+          <PolePreview
+            expanded={previewExpanded}
+            openPreview={openPreview}
+            closePreview={closePreview}
+            connected={!!device}
+            liveFrame={liveFrame}
+            liveStatus={liveStatus}
+            retryLive={() => setLiveAttempt(value => value + 1)}
+            scene={poleScene}
+            count={count}
+            faceCount={faceCount}
+            copiedFaces={!!mount.copiedFaces}
+            faceBFromTop={faceBFromTop}
+            onPower={() => updateScene({ ...scene, on: !scene.on })}
+          />
+          <SceneControls
+            scene={scene}
+            face={face}
+            target={target}
+            setTarget={setTarget}
+            targetName={targetName}
+            selectDesign={selectDesign}
+            openPreview={openPreview}
+            updateFace={updateFace}
+            updateScene={updateScene}
+            segmentEditor={
+              <SegmentEditor
+                scene={scene}
+                total={editorTotal}
+                target={target}
+                setTarget={setTarget}
+                updateScene={updateScene}
+                limit={segmentLimit}
+              />
+            }
+            scenesTab={scenesTab}
+            invalid={!!layoutError}
+            deviceEffects={device?.effects}
+            apply={apply}
+            save={() => openModal('save')}
+            busy={busy}
+            connected={!!device}
+            undo={() => travel('back')}
+            redo={() => travel('forward')}
+            canUndo={historySize.past > 0}
+            canRedo={historySize.future > 0}
+          />
+        </div>
+      </main>
+      <footer>
+        <div className="pole-symbol" />
+        <strong>{device?.name || 'Poste 01'}</strong>
+        <span className="footer-divider" />
+        <span>
+          {mount.name} · {mount.copiedFaces ? mountTotal * 2 : mountTotal} píxeles
+        </span>
+        <span className="footer-divider" />
+        <span>
+          {mount.copiedFaces || faceCount === 2 ? `${count} por cara` : count === 100 ? 'Una cara' : 'Una tira'}
+        </span>
+        <span className="footer-right">Diseñado para brillar.</span>
+      </footer>
+      {toast && (
+        <div role={toast.type === 'error' ? 'alert' : 'status'} className={`toast ${toast.type}`}>
+          <Check size={18} />
+          <span>{toast.message}</span>
+          <button aria-label="Cerrar notificación" onClick={() => setToast(null)}>
+            ×
+          </button>
+        </div>
+      )}
+      {modal === 'connect' && (
+        <ConnectModal
+          device={device}
+          address={address}
+          setAddress={setAddress}
+          busy={busy}
+          error={error}
+          connect={connectTo}
+          disconnect={disconnect}
+          close={closeModal}
+        />
+      )}
+      {modal === 'save' && (
+        <SaveModal
+          initialName={`${effectById(face.effect).name} ${savedScenes.length + poleScenes.length + 1}`}
+          connected={!!device}
+          busy={busy}
+          error={error}
+          save={save}
+          close={closeModal}
+        />
+      )}
+      {modal === 'settings' && (
+        <SettingsModal
+          device={device}
+          poleConfig={poleConfig}
+          outputCount={outputCount}
+          mountId={mountId}
+          selectMount={selectMount}
+          faceCount={faceCount}
+          copiedFaces={!!mount.copiedFaces}
+          faceBFromTop={faceBFromTop}
+          setFaceBFromTop={value => {
+            setFaceBFromTop(value);
+            writeSetting('luma-face-b-top', String(value));
+          }}
+          busy={busy}
+          error={error}
+          redetect={redetect}
+          changeLedCount={changeLedCount}
+          changeCurrentLimit={changeCurrentLimit}
+          changeNetwork={changeNetwork}
+          pin={pin}
+          setPin={setPin}
+          close={closeModal}
+        />
+      )}
+    </div>
+  );
 }

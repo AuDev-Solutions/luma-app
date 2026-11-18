@@ -20,8 +20,11 @@ const browser = await chromium.launch({ executablePath: browserPath(), channel: 
 const errores = [];
 
 async function abrir({ escritorio = false, conectar = true } = {}) {
-  const context = await browser.newContext(escritorio ? { viewport: { width: 1440, height: 1000 } }
-    : { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+  const context = await browser.newContext(
+    escritorio
+      ? { viewport: { width: 1440, height: 1000 } }
+      : { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true },
+  );
   const page = await context.newPage();
   page.on('pageerror', error => errores.push(error.message));
   const pole = createPole({ twoFaces: true, effects: ['Solid', ...efectosWled.filter(nombre => nombre !== 'Solid')] });
@@ -32,11 +35,13 @@ async function abrir({ escritorio = false, conectar = true } = {}) {
   await page.routeWebSocket(`ws://${POSTE}/ws`, ws => {
     let fase = 0;
     const enviar = () => {
-      const leds = pole.info().leds.count, cuadro = new Uint8Array(2 + leds * 3);
+      const leds = pole.info().leds.count,
+        cuadro = new Uint8Array(2 + leds * 3);
       cuadro.set([76, 1]);
       for (let i = 0; i < leds; i++) {
         const seg = pole.state.seg.find(item => i >= item.start && i < item.stop) ?? pole.state.seg[0];
-        const [a, b] = seg.col, mezcla = (Math.sin((i + fase) / 3) + 1) / 2;
+        const [a, b] = seg.col,
+          mezcla = (Math.sin((i + fase) / 3) + 1) / 2;
         for (let c = 0; c < 3; c++) cuadro[2 + i * 3 + c] = Math.round(a[c] * mezcla + (b?.[c] ?? 0) * (1 - mezcla));
       }
       fase++;
@@ -60,7 +65,11 @@ async function abrir({ escritorio = false, conectar = true } = {}) {
 // La barra inferior es fija: se oculta en las capturas de un elemento para que no tape su contenido.
 const tomar = async (objetivo, nombre) => {
   const esPagina = typeof objetivo.goto === 'function';
-  await objetivo.screenshot({ path: join(salida, `${nombre}.png`), animations: 'disabled', style: esPagina ? '' : '.action-dock{visibility:hidden}' });
+  await objetivo.screenshot({
+    path: join(salida, `${nombre}.png`),
+    animations: 'disabled',
+    style: esPagina ? '' : '.action-dock{visibility:hidden}',
+  });
   console.log(`  ${nombre}.png`);
 };
 const seccion = (page, id) => page.locator(`section[aria-labelledby="${id}"]`);
@@ -78,31 +87,39 @@ try {
   // Inicio y conexión
   {
     const { page, close } = await abrir({ conectar: false });
-    await pausa(page); await tomar(page, 'inicio-desconectado');
+    await pausa(page);
+    await tomar(page, 'inicio-desconectado');
     await page.getByRole('button', { name: 'Conectar poste', exact: true }).click();
     await page.getByRole('textbox', { name: 'Dirección del poste' }).fill(POSTE);
-    await pausa(page); await tomar(page.getByRole('dialog'), 'conectar-dialogo');
+    await pausa(page);
+    await tomar(page.getByRole('dialog'), 'conectar-dialogo');
     await close();
   }
   // Editor por pestañas (móvil)
   {
     const { page, close } = await abrir();
     const editor = page.locator('section[aria-label="Editor de escenas"]');
-    await pausa(page); await tomar(page, 'conectado');
+    await pausa(page);
+    await tomar(page, 'conectado');
     await page.locator('label.master-brightness').scrollIntoViewIfNeeded();
     await tomar(page.locator('label.master-brightness'), 'brillo');
-    await page.getByRole('tab', { name: 'Colores' }).click(); await pausa(page);
+    await page.getByRole('tab', { name: 'Colores' }).click();
+    await pausa(page);
     await tomar(editor, 'colores');
     await page.getByRole('tab', { name: 'Efectos' }).click();
-    await page.getByRole('button', { name: 'Seleccionar Fuego ámbar', exact: true }).click(); await pausa(page);
+    await page.getByRole('button', { name: 'Seleccionar Fuego ámbar', exact: true }).click();
+    await pausa(page);
     await tomar(page.locator('.effect-settings'), 'efecto-detalle');
     await page.getByLabel('Buscar diseños').evaluate(el => el.scrollIntoView({ block: 'start' }));
-    await page.evaluate(() => scrollBy(0, -150)); await pausa(page);
+    await page.evaluate(() => scrollBy(0, -150));
+    await pausa(page);
     await tomar(page, 'efectos-galeria');
     await page.getByRole('tab', { name: 'Segmentos' }).click();
-    await page.getByRole('button', { name: 'Partir en 2', exact: true }).click(); await pausa(page);
+    await page.getByRole('button', { name: 'Partir en 2', exact: true }).click();
+    await pausa(page);
     await tomar(editor, 'segmentos');
-    await page.getByRole('button', { name: 'Ampliar vista previa' }).first().click(); await pausa(page);
+    await page.getByRole('button', { name: 'Ampliar vista previa' }).first().click();
+    await pausa(page);
     await tomar(page.getByRole('dialog'), 'vista-poste-ampliada');
     await page.keyboard.press('Escape');
     await close();
@@ -110,34 +127,40 @@ try {
   // Escenas, temas, modo automático y horario
   {
     const { page, close } = await abrir();
-    await page.getByRole('tab', { name: 'Escenas' }).click(); await pausa(page);
+    await page.getByRole('tab', { name: 'Escenas' }).click();
+    await pausa(page);
     await tomar(seccion(page, 'themes-title'), 'temas');
     await page.getByRole('button', { name: /Navidad/ }).click();
     await page.getByRole('button', { name: 'Guardar escena', exact: true }).click();
     await page.getByRole('textbox', { name: 'Nombre de la escena' }).fill('Navidad');
-    await pausa(page); await tomar(page.getByRole('dialog'), 'escenas-guardar');
+    await pausa(page);
+    await tomar(page.getByRole('dialog'), 'escenas-guardar');
     await page.getByRole('dialog').getByRole('button', { name: 'Guardar escena' }).click();
     await page.getByText('“Navidad” guardada en el poste y en este teléfono.').waitFor();
     await page.getByRole('button', { name: 'Cerrar notificación' }).click();
     await page.getByRole('button', { name: /Halloween/ }).click();
     await guardarEnPoste(page, 'Halloween');
     await page.getByRole('button', { name: 'Usar Navidad al encender' }).click();
-    await page.getByText('El poste mostrará esa escena al encender.').waitFor(); await pausa(page);
+    await page.getByText('El poste mostrará esa escena al encender.').waitFor();
+    await pausa(page);
     await tomar(seccion(page, 'pole-title'), 'escenas-lista');
     await page.getByRole('checkbox', { name: 'Navidad' }).check();
-    await page.getByRole('checkbox', { name: 'Halloween' }).check(); await pausa(page);
+    await page.getByRole('checkbox', { name: 'Halloween' }).check();
+    await pausa(page);
     await tomar(seccion(page, 'auto-title'), 'modo-automatico');
     await page.getByRole('radio', { name: 'Al anochecer' }).click();
     await page.getByRole('spinbutton', { name: 'Latitud' }).fill('4.71');
     await page.getByRole('spinbutton', { name: 'Longitud' }).fill('-74.07');
-    await page.getByRole('checkbox', { name: 'Apagar a una hora' }).check(); await pausa(page);
+    await page.getByRole('checkbox', { name: 'Apagar a una hora' }).check();
+    await pausa(page);
     await tomar(seccion(page, 'schedule-title'), 'horario');
     await close();
   }
   // Mi montaje
   {
     const { page, close } = await abrir();
-    await page.getByRole('button', { name: 'Mi montaje' }).click(); await pausa(page);
+    await page.getByRole('button', { name: 'Mi montaje' }).click();
+    await pausa(page);
     await tomar(page.getByRole('dialog'), 'mi-montaje');
     await tomar(seccion(page, 'power-title'), 'consumo');
     await tomar(seccion(page, 'wifi-title'), 'wifi-propio');
@@ -147,9 +170,11 @@ try {
   // Escritorio
   {
     const { page, close } = await abrir({ escritorio: true });
-    await pausa(page); await tomar(page, 'escritorio-general');
+    await pausa(page);
+    await tomar(page, 'escritorio-general');
     await page.getByRole('tab', { name: 'Segmentos' }).click();
-    await page.getByRole('button', { name: 'Partir en 4', exact: true }).click(); await pausa(page);
+    await page.getByRole('button', { name: 'Partir en 4', exact: true }).click();
+    await pausa(page);
     await tomar(page, 'escritorio-segmentos');
     await close();
   }
@@ -157,5 +182,8 @@ try {
   await browser.close();
   await new Promise(resolve => server.httpServer.close(resolve));
 }
-if (errores.length) { console.error('Errores de la página:', errores); process.exit(1); }
+if (errores.length) {
+  console.error('Errores de la página:', errores);
+  process.exit(1);
+}
 console.log(`Listo: capturas en ${salida}`);

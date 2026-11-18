@@ -4,7 +4,10 @@
 import { readFileSync } from 'node:fs';
 
 const [host, pin] = process.argv.slice(2);
-if (!host) { console.error('Indica la dirección del poste: npm run instalar:poste -- 192.168.1.50'); process.exit(1); }
+if (!host) {
+  console.error('Indica la dirección del poste: npm run instalar:poste -- 192.168.1.50');
+  process.exit(1);
+}
 const base = host.includes('://') ? host.replace(/\/$/, '') : `http://${host}`;
 const files = ['luma.htm.gz', 'luma.webmanifest', 'luma-192.png', 'luma-512.png'];
 // The same page as the pole's home page: http://4.3.2.1 opens LUMA (WLED serves /index.htm from its
@@ -13,10 +16,17 @@ const uploads = [...files.map(file => [file, file]), ['luma.htm.gz', 'index.htm.
 
 const info = await fetch(`${base}/json/info`, { signal: AbortSignal.timeout(6000) }).then(response => response.json());
 const free = (info.fs?.t ?? 0) - (info.fs?.u ?? 0);
-const size = uploads.reduce((sum, [file]) => sum + readFileSync(new URL(`../dist-poste/${file}`, import.meta.url)).length, 0) / 1024;
+const size =
+  uploads.reduce((sum, [file]) => sum + readFileSync(new URL(`../dist-poste/${file}`, import.meta.url)).length, 0) /
+  1024;
 if (free && size > free) throw new Error(`El poste tiene ${free} KB libres y LUMA necesita ${size.toFixed(0)} KB.`);
 // /upload checks the settings PIN per session.
-if (pin) await fetch(`${base}/json/state`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin }) });
+if (pin)
+  await fetch(`${base}/json/state`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pin }),
+  });
 
 for (const [file, target] of uploads) {
   const form = new FormData();

@@ -16,17 +16,23 @@ const assets = readdirSync(new URL('assets/', dist));
 let html = read('index.html').toString();
 const css = assets.find(file => file.endsWith('.css'));
 const js = assets.find(file => file.endsWith('.js'));
-if (!css || !js || assets.filter(file => file.endsWith('.js')).length !== 1) throw new Error('Expected exactly one JS bundle and one stylesheet in dist/assets.');
+if (!css || !js || assets.filter(file => file.endsWith('.js')).length !== 1)
+  throw new Error('Expected exactly one JS bundle and one stylesheet in dist/assets.');
 
 // Fonts: keep the Latin subsets (Spanish text) as data URIs, drop other scripts' @font-face blocks.
 let styles = read(`assets/${css}`).toString();
 styles = styles.replace(/@font-face\{[^}]*\}/g, block => {
   const font = block.match(/url\(\.\/([^)]+\.woff2)\)/)?.[1];
   if (!font || !/-latin(-ext)?-/.test(font)) return '';
-  return block.replace(/url\(\.\/[^)]+\.woff2\)/, `url(data:font/woff2;base64,${read(`assets/${font}`).toString('base64')})`);
+  return block.replace(
+    /url\(\.\/[^)]+\.woff2\)/,
+    `url(data:font/woff2;base64,${read(`assets/${font}`).toString('base64')})`,
+  );
 });
 
-const script = read(`assets/${js}`).toString().replace(/<\/script/gi, '<\\/script');
+const script = read(`assets/${js}`)
+  .toString()
+  .replace(/<\/script/gi, '<\\/script');
 const icon = `data:image/svg+xml;base64,${read('favicon.svg').toString('base64')}`;
 html = html
   .replace(/<script type="module" crossorigin src="[^"]+"><\/script>/, () => `<script type="module">${script}</script>`)
@@ -37,10 +43,16 @@ html = html
 if (/src="\.\/assets|href="\.\/assets/.test(html)) throw new Error('An asset reference was not inlined.');
 
 const manifest = JSON.parse(read('manifest.webmanifest'));
-Object.assign(manifest, { start_url: 'luma.htm', scope: '/', icons: manifest.icons.map(item => ({ ...item, src: item.src.replace('icon-', 'luma-') })) });
+Object.assign(manifest, {
+  start_url: 'luma.htm',
+  scope: '/',
+  icons: manifest.icons.map(item => ({ ...item, src: item.src.replace('icon-', 'luma-') })),
+});
 
 const page = gzipSync(html, { level: 9 });
 writeFileSync(new URL('luma.htm.gz', out), page);
 writeFileSync(new URL('luma.webmanifest', out), JSON.stringify(manifest));
 for (const size of [192, 512]) writeFileSync(new URL(`luma-${size}.png`, out), read(`icon-${size}.png`));
-console.log(`luma.htm.gz ${(page.length / 1024).toFixed(1)} KB (sin comprimir ${(html.length / 1024).toFixed(1)} KB) → ${join('dist-poste', 'luma.htm.gz')}`);
+console.log(
+  `luma.htm.gz ${(page.length / 1024).toFixed(1)} KB (sin comprimir ${(html.length / 1024).toFixed(1)} KB) → ${join('dist-poste', 'luma.htm.gz')}`,
+);
