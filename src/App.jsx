@@ -9,10 +9,10 @@ import SaveModal from './components/SaveModal.jsx';
 import SettingsModal from './components/SettingsModal.jsx';
 import { prepareScene, toPole, fromPole, segmentError } from './lib/segments.js';
 import { effectById, initialScene, readSavedScenes, presetFace } from './lib/scenes.js';
-import { applyWled, connectWled, sceneFromDevice, setLedCount, sendScene, presetPayload, request, setSettingsPin, PinRequiredError } from './lib/wled.js';
+import { applyWled, connectWled, sceneFromDevice, setLedCount, copyFaceB, sendScene, presetPayload, request, setSettingsPin, PinRequiredError } from './lib/wled.js';
 import { readPresets, listScenes, rememberAppliedScene, APPLIED_PRESET, saveScenePreset, deletePreset, applyPreset, saveAutoMode, syncClock, clockStatus, saveSchedule, clearSchedule, setBootPreset, setCurrentLimit, setStandaloneNetwork, localOffsetSeconds } from './lib/controller.js';
 import { subscribeLivePreview } from './lib/live-preview.js';
-import { mountById, mountFor, supportedTotals } from './lib/mounts.js';
+import { mountById, mountFor, supportedTotals, copiedOutputs } from './lib/mounts.js';
 
 const readSetting = (key, fallback) => { try { return localStorage.getItem(key) ?? fallback; } catch { return fallback; } };
 const writeSetting = (key, value) => { try { localStorage.setItem(key, value); } catch { /* per-browser convenience only */ } };
@@ -31,7 +31,6 @@ export default function App() {
   const [scene, setSceneState] = useState(() => prepareScene(initialScene, mount.faceCount === 2 ? mount.count : mount.total, 1));
   // Like WLED, edits go to the selected segment; «Todos» is an explicit choice.
   const [target, setTarget] = useState(0);
-  const [view, setView] = useState('both');
   const [device, setDevice] = useState(null);
   const [poleScenes, setPoleScenes] = useState([]);
   const [poleConfig, setPoleConfig] = useState(null);
@@ -137,12 +136,13 @@ export default function App() {
   function selectMount(id, nextScene) {
     const selected = mountById(id);
     const next = nextScene || prepareScene({ ...sceneRef.current, segments: undefined }, selected.faceCount === 2 ? selected.count : selected.total, 1);
-    setMountId(id); writeSetting('luma-mount', id); setTarget(next.segments[0].id); setView(selected.faceCount === 1 ? 'a' : 'both'); setScene(next);
+    setMountId(id); writeSetting('luma-mount', id); setTarget(next.segments[0].id); setScene(next);
   }
   function loadIntoEditor(saved, message) {
     let next = structuredClone(saved), total = next.total || editorTotal;
-    // A scene saved for the whole two-face pole is read as one face.
-    if (faceCount === 2 && total === mountTotal) { next = fromPole(prepareScene(next, total, 2), 2); total = editorTotal; }
+    // A scene saved for the whole two-face pole is read as one face; with copied faces the controller
+    // shows only that face, repeated on both sides.
+    if ((faceCount === 2 && total === mountTotal) || (mount.copiedFaces && total === 2 * editorTotal)) { next = fromPole(prepareScene(next, total, 2), 2); total = editorTotal; }
     if (total === editorTotal) selectMount(mountId, prepareScene(next, total, 1));
     else if (device) { notify(`Esta escena tiene ${total} LEDs y el poste ${mountTotal}.`, 'error'); return; }
     else { const fit = mountFor(total, mountId); selectMount(fit.id, fit.faceCount === 2 ? fromPole(prepareScene(next, total, 2), 2) : prepareScene(next, total, 1)); }
@@ -155,8 +155,10 @@ export default function App() {
     setPoleScenes(listScenes(presets)); setPoleConfig(config);
     return config;
   }
-  function adopt(connected) {
-    const detected = mountFor(connected.count, mountId);
+  // `detected` comes from the controller's outputs when they were just read; otherwise from the last read.
+  function adopt(connected, detected) {
+    const known = poleConfigRef.current;
+    detected ||= mountFor(connected.count, mountId, known?.hw?.led?.ins?.length ?? 1, known ? copiedOutputs(known) : undefined);
     if (!detected) throw new Error(`El poste tiene ${connected.count} LEDs configurados y LUMA admite ${supportedTotals.join(', ')}. Corrígelo en ${connected.address}/settings/leds: el total es el inicio más la longitud de la última salida (dos caras: inicio 0 y 100, longitud 100 cada una).`);
     setDevice(connected); lastLayout.current = null;
     const shown = fromPole(sceneFromDevice(connected), detected.faceCount);
@@ -169,21 +171,30 @@ export default function App() {
   async function connectTo(value, { silent = false } = {}) {
     setBusy(true); setError(''); const attempt = ++connectAttempt.current;
     try {
-      const connected = await connectWled(value);
+      let connected = await connectWled(value);
       if (attempt !== connectAttempt.current) return;
-      adopt(connected); setModal(null);
+      let config = await refreshPole(connected.address);
+      const outputs = config?.hw?.led?.ins?.length ?? 1;
+      // Each face on its own data pin: face B's output repeats face A's, so both faces show exactly the
+      // same in every effect. Separate segments would draw random effects differently on each face.
+      let copyFailure = '', copiedNow = false;
+      if (outputs === 2 && !copiedOutputs(config)) {
+        try {
+          copiedNow = await copyFaceB(connected.address);
+          connected = await connectWled(connected.address); config = await refreshPole(connected.address);
+        } catch (failure) { copyFailure = failure.message; }
+      }
+      if (attempt !== connectAttempt.current) return;
+      // Each face on its own data pin starts at the bottom: no continuous cable up to face B.
+      if (outputs === 2) { setFaceBFromTop(false); writeSetting('luma-face-b-top', 'false'); }
+      adopt(connected, mountFor(connected.count, mountId, outputs, copiedOutputs(config))); setModal(null);
+      // The boot scene was saved for separate faces: send the scene again so it is kept for the new layout.
+      if (copiedNow) syncedScene.current = null;
       writeSetting('luma-address', value); writeSetting('luma-autoconnect', 'true');
       // No battery-backed clock: give the pole this phone's time so schedules work offline.
-      const config = await refreshPole(connected.address);
-      // Each face on its own data pin starts at the bottom: no continuous cable up to face B.
-      const outputs = config?.hw?.led?.ins?.length ?? 1;
-      const fit = mountFor(connected.count, mountId, outputs);
-      if (outputs === 2 && fit.faceCount === 2) {
-        if (fit.id !== mountFor(connected.count, mountId).id) selectMount(fit.id);
-        setFaceBFromTop(false); writeSetting('luma-face-b-top', 'false');
-      }
       if (!clockStatus(connected.info).valid) await syncClock(connected.address, config).catch(() => {});
-      notify(`Conectado a ${connected.name}.`);
+      if (copyFailure) notify(`Conectado a ${connected.name}, pero la cara B no quedó copiando a la cara A: ${copyFailure}`, 'error');
+      else notify(copiedNow ? `Conectado a ${connected.name}. La cara B ahora repite la cara A en todos los efectos.` : `Conectado a ${connected.name}.`);
     } catch (failure) { if (attempt === connectAttempt.current && !silent) setError(failure.message); else if (silent) notify(failure instanceof TypeError || failure.name === 'TimeoutError' || failure.name === 'AbortError' ? 'No se encontró el poste guardado. Conéctalo desde «Conectar poste».' : failure.message, 'error'); }
     finally { if (attempt === connectAttempt.current) setBusy(false); }
   }
@@ -293,7 +304,7 @@ export default function App() {
     <header className="header"><a className="brand" href="./" aria-label="Luma, inicio"><span className="brand-mark"><i /><i /><i /></span>LUMA</a><span className="brand-description">Control de iluminación</span><div className="header-actions"><button className="settings-button" onClick={() => openModal('settings')} aria-label="Mi montaje"><SlidersHorizontal size={17} /><span>Mi montaje</span></button><button className="connect-button" onClick={() => openModal('connect')} title={device ? 'Conectado al poste' : 'Sin conexión: modo demostración'}><i className={`status-dot ${device ? 'on' : 'off'}`} aria-hidden="true" /><span>{device ? 'Conexión' : 'Conectar poste'}</span></button></div></header>
     <main>
       <div className="workspace">
-        <PolePreview expanded={previewExpanded} openPreview={openPreview} closePreview={closePreview} connected={!!device} liveFrame={liveFrame} liveStatus={liveStatus} retryLive={() => setLiveAttempt(value => value + 1)} scene={poleScene} count={count} faceCount={faceCount} faceBFromTop={faceBFromTop} view={view} setView={setView} onPower={() => updateScene({ ...scene, on: !scene.on })} />
+        <PolePreview expanded={previewExpanded} openPreview={openPreview} closePreview={closePreview} connected={!!device} liveFrame={liveFrame} liveStatus={liveStatus} retryLive={() => setLiveAttempt(value => value + 1)} scene={poleScene} count={count} faceCount={faceCount} copiedFaces={!!mount.copiedFaces} faceBFromTop={faceBFromTop} onPower={() => updateScene({ ...scene, on: !scene.on })} />
         <SceneControls scene={scene} face={face} target={target} setTarget={setTarget} targetName={targetName} selectDesign={selectDesign} openPreview={openPreview} updateFace={updateFace} updateScene={updateScene}
           segmentEditor={<SegmentEditor scene={scene} total={editorTotal} target={target} setTarget={setTarget} updateScene={updateScene} limit={segmentLimit} />}
           scenesTab={scenesTab} invalid={!!layoutError} deviceEffects={device?.effects} apply={apply}
@@ -301,10 +312,10 @@ export default function App() {
           undo={() => travel('back')} redo={() => travel('forward')} canUndo={historySize.past > 0} canRedo={historySize.future > 0} />
       </div>
     </main>
-    <footer><div className="pole-symbol" /><strong>{device?.name || 'Poste 01'}</strong><span className="footer-divider" /><span>{mount.name} · {mountTotal} píxeles</span><span className="footer-divider" /><span>{faceCount === 1 ? (count === 100 ? 'Una cara' : 'Una tira') : `${count} por cara`}</span><span className="footer-right">Diseñado para brillar.</span></footer>
+    <footer><div className="pole-symbol" /><strong>{device?.name || 'Poste 01'}</strong><span className="footer-divider" /><span>{mount.name} · {mount.copiedFaces ? mountTotal * 2 : mountTotal} píxeles</span><span className="footer-divider" /><span>{mount.copiedFaces || faceCount === 2 ? `${count} por cara` : count === 100 ? 'Una cara' : 'Una tira'}</span><span className="footer-right">Diseñado para brillar.</span></footer>
     {toast && <div role={toast.type === 'error' ? 'alert' : 'status'} className={`toast ${toast.type}`}><Check size={18} /><span>{toast.message}</span><button aria-label="Cerrar notificación" onClick={() => setToast(null)}>×</button></div>}
     {modal === 'connect' && <ConnectModal device={device} address={address} setAddress={setAddress} busy={busy} error={error} connect={connectTo} disconnect={disconnect} close={closeModal} />}
     {modal === 'save' && <SaveModal initialName={`${effectById(face.effect).name} ${savedScenes.length + poleScenes.length + 1}`} connected={!!device} busy={busy} error={error} save={save} close={closeModal} />}
-    {modal === 'settings' && <SettingsModal device={device} poleConfig={poleConfig} mountId={mountId} selectMount={selectMount} faceCount={faceCount} faceBFromTop={faceBFromTop} setFaceBFromTop={value => { setFaceBFromTop(value); writeSetting('luma-face-b-top', String(value)); }} busy={busy} error={error} redetect={redetect} changeLedCount={changeLedCount} changeCurrentLimit={changeCurrentLimit} changeNetwork={changeNetwork} pin={pin} setPin={setPin} close={closeModal} />}
+    {modal === 'settings' && <SettingsModal device={device} poleConfig={poleConfig} mountId={mountId} selectMount={selectMount} faceCount={faceCount} copiedFaces={!!mount.copiedFaces} faceBFromTop={faceBFromTop} setFaceBFromTop={value => { setFaceBFromTop(value); writeSetting('luma-face-b-top', String(value)); }} busy={busy} error={error} redetect={redetect} changeLedCount={changeLedCount} changeCurrentLimit={changeCurrentLimit} changeNetwork={changeNetwork} pin={pin} setPin={setPin} close={closeModal} />}
   </div>;
 }

@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { Check, Zap, ShieldCheck, ShieldAlert, ExternalLink, Wifi } from 'lucide-react';
 import Modal from './Modal.jsx';
-import { mounts } from '../lib/mounts.js';
+import { selectableMounts } from '../lib/mounts.js';
 import { powerStatus, securityStatus, networkStatus, standaloneNetworkError } from '../lib/controller.js';
 
 // Mount, LED count, current limit and security for the connected pole.
-export default function SettingsModal({ device, poleConfig, mountId, selectMount, faceCount, faceBFromTop, setFaceBFromTop, busy, error, redetect, changeLedCount, changeCurrentLimit, changeNetwork, pin, setPin, close }) {
+export default function SettingsModal({ device, poleConfig, mountId, selectMount, faceCount, copiedFaces, faceBFromTop, setFaceBFromTop, busy, error, redetect, changeLedCount, changeCurrentLimit, changeNetwork, pin, setPin, close }) {
   const [confirmCount, setConfirmCount] = useState(null);
   const power = device && powerStatus(device.info, poleConfig);
   const security = poleConfig && securityStatus(poleConfig);
@@ -43,12 +43,13 @@ export default function SettingsModal({ device, poleConfig, mountId, selectMount
 
   return <Modal title="Mi montaje" close={close}>
     <p className="modal-copy">Los LED WS2811 no avisan cuántos hay conectados: la cantidad es la que está configurada en el controlador. {device ? `Este poste tiene ${device.count} LEDs configurados.` : 'Sin conexión, esta opción solo cambia el simulador.'}</p>
-    <div className="mount-options">{mounts.map(item => <button key={item.id} disabled={!!device && item.total !== device.count} className={mountId === item.id ? 'active' : ''} onClick={() => selectMount(item.id)}><span><strong>{item.name}</strong><small>{item.description}</small></span>{mountId === item.id && <Check size={20} />}</button>)}</div>
+    <div className="mount-options">{selectableMounts(mountId).map(item => <button key={item.id} disabled={!!device && item.total !== device.count} className={mountId === item.id ? 'active' : ''} onClick={() => selectMount(item.id)}><span><strong>{item.name}</strong><small>{item.description}</small></span>{mountId === item.id && <Check size={20} />}</button>)}</div>
     {poleConfig?.hw?.led?.ins?.length > 1 && <p className="storage-note">Salidas de datos: {poleConfig.hw.led.ins.map(bus => `GPIO ${bus.pin[0]} (LED ${bus.start + 1}–${bus.start + bus.len})`).join(' · ')}</p>}
+    {copiedFaces && <p className="storage-note">Cada cara tiene su pin de datos y las dos salidas empiezan en el LED 1: el controlador envía lo mismo a las dos caras, LED por LED, en todos los efectos.</p>}
     {faceCount === 2 && <label className="check-row"><input type="checkbox" checked={faceBFromTop} onChange={event => setFaceBFromTop(event.target.checked)} /><span><strong>La cara B empieza arriba</strong><small>Cable continuo: la cara B se conecta al final de la cara A, en lo alto del poste.</small></span></label>}
     {device && <div className="led-count-actions">
-      {device.count === 100 && <button className="secondary-button full" disabled={busy} onClick={() => setConfirmCount(200)}>Ya conecté 200 LEDs en serie · usar 200 LEDs</button>}
-      {device.count === 200 && <button className="secondary-button full" disabled={busy} onClick={() => setConfirmCount(100)}>Volver a 100 LEDs</button>}
+      {!copiedFaces && device.count === 100 && <button className="secondary-button full" disabled={busy} onClick={() => setConfirmCount(200)}>Ya conecté 200 LEDs en serie · usar 200 LEDs</button>}
+      {!copiedFaces && device.count === 200 && <button className="secondary-button full" disabled={busy} onClick={() => setConfirmCount(100)}>Volver a 100 LEDs</button>}
       <button className="secondary-button full" disabled={busy} onClick={redetect}>{busy ? 'Leyendo el poste…' : 'Volver a detectar'}</button>
     </div>}
 

@@ -168,19 +168,23 @@ test('Standalone Wi-Fi: the pole gets its own network and the app explains how t
   assert.deepEqual(errors, []); await close();
 });
 
-test('Two faces always show the same: one face is edited and copied to the other', async () => {
+test('Two faces on their own pins: face B repeats face A in hardware, one pole is shown', async () => {
   const { page, pole, errors, close } = await open({ twoFaces: true });
   await page.getByText('Dos caras iguales · 100 píxeles por cara').waitFor();
   await settled(pole);
-  const ranges = () => pole.posts.at(-1).seg.filter(item => item.stop).map(item => [item.start, item.stop, effects[item.fx], item.col[0].join()]);
-  assert.deepEqual(ranges().map(item => item.slice(0, 2)), [[0, 100], [100, 200]], 'the old 200-LED strip is split into the two faces on connect');
+  // Both outputs start at LED 1: WLED sends every pixel to both pins, so random effects match too.
+  const outputs = pole.cfg.hw.led.ins.map(bus => [bus.pin[0], bus.start, bus.len, bus.drv]);
+  assert.deepEqual(outputs, [[17, 0, 100, 0], [3, 0, 100, 1]], 'pins and drivers are kept, face B starts at LED 1');
+  const ranges = () => pole.posts.at(-1).seg.filter(item => item.stop).map(item => [item.start, item.stop]);
+  assert.deepEqual(ranges(), [[0, 100]], 'one face is sent; the controller copies it to face B');
   assert.equal(await page.getByRole('button', { name: 'Cara A', exact: true }).count(), 0, 'faces cannot be edited separately');
   await page.getByRole('tab', { name: 'Segmentos' }).click();
   await page.getByRole('button', { name: 'Partir en 2', exact: true }).click();
   await page.waitForTimeout(600);
-  const [a1, a2, b1, b2] = ranges();
-  assert.deepEqual([a1, a2, b1, b2].map(item => item.slice(0, 2)), [[0, 50], [50, 100], [100, 150], [150, 200]]);
-  assert.deepEqual([b1[2], b1[3], b2[2], b2[3]], [a1[2], a1[3], a2[2], a2[3]], 'face B repeats face A');
+  assert.deepEqual(ranges(), [[0, 50], [50, 100]]);
+  await page.getByRole('button', { name: 'Mi montaje' }).click();
+  await page.getByText('Dos caras · 200 LEDs').first().waitFor();
+  assert.equal(await page.getByRole('button', { name: /usar 200 LEDs/ }).count(), 0, 'no series wiring offer with one face per pin');
   assert.deepEqual(errors, []); await close();
 });
 

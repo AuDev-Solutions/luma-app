@@ -1,6 +1,7 @@
 import { segmentError, MAX_SEGMENTS } from './segments.js';
 import { effectById, hexToRgb, effects, faceIntensity, paletteKey } from './scenes.js';
 import { resolvePalette, paletteFromIndex } from './palettes.js';
+import { copiedOutputs } from './mounts.js';
 
 export function resolveEffect(effect, names) {
   return [effect.wled, ...(effect.aliases || [])].map(candidate => names.findIndex(name => name.toLowerCase() === candidate.toLowerCase())).find(index => index >= 0) ?? -1;
@@ -183,15 +184,38 @@ export async function setLedCount(address, total) {
     throw new Error('El controlador tiene más de dos salidas o ninguna. Cambia la cantidad en la configuración de LEDs del controlador.');
   }
   if ((outputs[0].start ?? 0) !== 0) throw new Error('La salida de LEDs no empieza en 0. Revísala en la configuración de LEDs del controlador.');
-  // One face per data pin (e.g. GPIO 17 and 18): the total is split evenly, face B right after face A.
-  const share = total / outputs.length;
+  // One face per data pin (e.g. GPIO 17 and 3). Copied faces: both outputs carry the same `total` LEDs.
+  // Otherwise the total is split evenly, face B right after face A.
+  const copied = copiedOutputs(config);
+  const share = copied ? total : total / outputs.length;
   if (!Number.isInteger(share)) throw new Error(`No se pueden repartir ${total} LEDs entre ${outputs.length} salidas.`);
-  await request(address, '/json/cfg', { hw: { led: { ins: outputs.map((bus, index) => ({ ...bus, start: index * share, len: share })) } } });
-  // Bus re-initialisation happens in WLED's next loop; poll until it reports the new count.
+  await request(address, '/json/cfg', { hw: { led: { ins: outputs.map((bus, index) => ({ ...bus, start: copied ? 0 : index * share, len: share })) } } });
+  await confirmCount(address, total, `El poste recibió el cambio, pero no confirmó ${total} LEDs. Revisa la configuración de LEDs del controlador.`);
+}
+
+// Bus re-initialisation happens in WLED's next loop; poll until it reports the new count.
+async function confirmCount(address, total, message) {
   for (let attempt = 0; attempt < 10; attempt++) {
     await new Promise(resolve => setTimeout(resolve, 400));
     const info = await request(address, '/json/info').catch(() => null);
     if (info?.leds?.count === total) return;
   }
-  throw new Error(`El poste recibió el cambio, pero no confirmó ${total} LEDs. Revisa la configuración de LEDs del controlador.`);
+  throw new Error(message);
+}
+
+// Two faces on their own data pins: face B's output starts at LED 1 like face A's, so the controller
+// sends every pixel to both pins (WLED BusManager writes a pixel to every output that contains it).
+// Both faces then show exactly the same in every effect, including the random ones (sparkles,
+// fireworks, rain…) that two separate segments would draw differently. Pins, drivers (face B on I2S),
+// type, colour order and current limits are kept.
+export async function copyFaceB(address) {
+  const config = await request(address, '/json/cfg');
+  const outputs = config?.hw?.led?.ins;
+  if (copiedOutputs(config)) return false;
+  if (!Array.isArray(outputs) || outputs.length !== 2 || (outputs[0].start ?? 0) !== 0 || outputs[1].len !== outputs[0].len || outputs[1].start !== outputs[0].len) {
+    throw new Error('Las dos salidas del controlador no son dos caras iguales seguidas (cara A desde el LED 1, cara B a continuación con la misma cantidad). Revísalas en la configuración de LEDs del controlador.');
+  }
+  await request(address, '/json/cfg', { hw: { led: { ins: outputs.map(bus => ({ ...bus, start: 0 })) } } });
+  await confirmCount(address, outputs[0].len, 'El poste recibió el cambio, pero sigue mostrando las caras por separado. Apágalo y vuelve a encenderlo, y conecta LUMA de nuevo.');
+  return true;
 }

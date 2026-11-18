@@ -22,7 +22,9 @@ export function createPole({ twoFaces = false, effects: fxdata = effects } = {})
     pole.state.seg[0].stop = 200;
     pole.cfg.hw.led.ins = [{ start: 0, len: 100, pin: [17], type: 22, maxpwr: 0, ledma: 30, drv: 0 }, { start: 100, len: 100, pin: [3], type: 22, maxpwr: 0, ledma: 30, drv: 1 }];
   }
-  pole.info = () => ({ name: 'Poste de prueba', time: '2026-9-30, 20:00:00', leds: { count: twoFaces ? 200 : 100, maxseg: 16, pwr: 1200 } });
+  // Like WLED, the LED count is where the last output ends: outputs that start at LED 1 overlap.
+  pole.count = () => Math.max(...pole.cfg.hw.led.ins.map(bus => (bus.start ?? 0) + bus.len));
+  pole.info = () => ({ name: 'Poste de prueba', time: '2026-9-30, 20:00:00', leds: { count: pole.count(), maxseg: 16, pwr: 1200 } });
   pole.route = async route => {
     const request = route.request(), path = new URL(request.url()).pathname, method = request.method();
     if (path === '/presets.json') return route.fulfill({ json: pole.presets });
@@ -34,7 +36,13 @@ export function createPole({ twoFaces = false, effects: fxdata = effects } = {})
       return route.fulfill({ body: 'File Uploaded!', contentType: 'text/plain' });
     }
     if (path === '/json/cfg') {
-      if (method === 'POST') { const body = request.postDataJSON(); pole.cfgPosts.push(body); pole.cfg = { ...pole.cfg, ...body, hw: body.hw ?? pole.cfg.hw }; return route.fulfill({ json: { success: true } }); }
+      if (method === 'POST') {
+        const body = request.postDataJSON(); pole.cfgPosts.push(body); pole.cfg = { ...pole.cfg, ...body, hw: body.hw ? { ...pole.cfg.hw, ...body.hw, led: { ...pole.cfg.hw.led, ...body.hw.led } } : pole.cfg.hw };
+        // WLED re-initialises the outputs and trims segments past the new end (fixInvalidSegments).
+        const total = pole.count();
+        pole.state.seg = pole.state.seg.filter(item => item.start < total).map(item => ({ ...item, stop: Math.min(item.stop, total) }));
+        return route.fulfill({ json: { success: true } });
+      }
       return route.fulfill({ json: pole.cfg });
     }
     if (path === '/json/state' && method === 'POST') {

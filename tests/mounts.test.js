@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mountFor, supportedTotals } from '../src/lib/mounts.js';
+import { mountFor, mountById, supportedTotals, copiedOutputs, selectableMounts } from '../src/lib/mounts.js';
 import { prepareScene, segmentError } from '../src/lib/segments.js';
-import { buildPayload, setLedCount } from '../src/lib/wled.js';
+import { buildPayload, setLedCount, copyFaceB } from '../src/lib/wled.js';
 import { initialScene, effects } from '../src/lib/scenes.js';
 
 const names = effects.map(effect => effect.wled);
@@ -57,5 +57,39 @@ test('Two data pins (GPIO 17 and 18): changing the count splits it evenly betwee
   try {
     await setLedCount('http://pole.test', 400);
     assert.deepEqual(posts[0].hw.led.ins.map(item => [item.pin[0], item.start, item.len]), [[17, 0, 200], [18, 200, 200]]);
+  } finally { globalThis.fetch = original; }
+});
+
+test('Outputs that both start at LED 1 are two faces copied by the controller', () => {
+  const bus = { start: 0, len: 100, pin: [17] };
+  assert.equal(copiedOutputs({ hw: { led: { ins: [bus, { ...bus, pin: [3] }] } } }), true);
+  assert.equal(copiedOutputs({ hw: { led: { ins: [bus, { ...bus, start: 100, pin: [3] }] } } }), false);
+  assert.equal(copiedOutputs({ hw: { led: { ins: [bus] } } }), false);
+  assert.equal(mountFor(100, 'face-100', 2, true).id, 'faces-copy-100');
+  assert.equal(mountFor(200, 'strip-200', 2, true).id, 'faces-copy-200');
+  assert.equal(mountFor(100, 'faces-copy-100').id, 'faces-copy-100', 'without the outputs the saved choice is kept');
+  assert.equal(mountFor(100, 'faces-copy-100', 1, false).id, 'face-100', 'outputs that do not overlap are not copied faces');
+  assert.equal(mountById('faces-copy-100').faceCount, 1, 'the editor and the preview work on one face');
+  assert.deepEqual(selectableMounts('face-100').filter(item => item.copiedFaces), [], 'copied faces are detected, never picked by hand');
+});
+
+test('Copying face B: its output moves to LED 1 keeping pin, driver and limits; the pole then reports one face', async () => {
+  const a = { start: 0, len: 100, pin: [17], type: 22, maxpwr: 0, ledma: 30, drv: 0 };
+  const b = { ...a, start: 100, pin: [3], drv: 1 };
+  let ins = [a, b]; const posts = [];
+  const original = globalThis.fetch;
+  globalThis.fetch = async (url, options) => {
+    if (options.method === 'POST') { const body = JSON.parse(options.body); posts.push(body); ins = body.hw.led.ins; return { ok: true, json: async () => ({ success: true }) }; }
+    const count = Math.max(...ins.map(bus => bus.start + bus.len));
+    return { ok: true, json: async () => url.endsWith('/json/cfg') ? { hw: { led: { ins } } } : { leds: { count } } };
+  };
+  try {
+    assert.equal(await copyFaceB('http://pole.test'), true);
+    assert.deepEqual(posts, [{ hw: { led: { ins: [a, { ...b, start: 0 }] } } }]);
+    assert.equal(await copyFaceB('http://pole.test'), false, 'already copied: nothing is written');
+    await setLedCount('http://pole.test', 200);
+    assert.deepEqual(posts[1].hw.led.ins.map(bus => [bus.pin[0], bus.start, bus.len]), [[17, 0, 200], [3, 0, 200]], 'both faces grow together');
+    ins = [a, { ...b, len: 50 }];
+    await assert.rejects(copyFaceB('http://pole.test'), /dos caras iguales/);
   } finally { globalThis.fetch = original; }
 });

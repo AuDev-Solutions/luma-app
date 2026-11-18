@@ -70,7 +70,7 @@ function drawBackground(ctx, width, height, config, poles, radius) {
     ctx.fillStyle = '#39433b'; ctx.beginPath();
     for (let i = 0; i < config.count; i++) { const y = bottom - i * (bottom - top) / (config.count - 1); const radiusX = width < 500 ? 4 : radius; ctx.moveTo(x + radiusX, y); ctx.ellipse(x, y, radiusX, radius, 0, 0, Math.PI * 2); }
     ctx.fill(); ctx.fillStyle = '#afb9b1'; ctx.font = '12px "Segoe UI", sans-serif';
-    ctx.fillText(config.count !== 100 && config.faceCount === 1 ? 'TIRA DE PRUEBA' : `CARA ${index ? 'B' : 'A'}`, x, height - 25);
+    ctx.fillText(config.bothFaces ? 'CARAS A Y B' : config.count !== 100 ? 'TIRA DE PRUEBA' : 'CARA A', x, height - 25);
   });
 }
 
@@ -136,12 +136,12 @@ export function createPoleRenderer(canvas, background) {
   }
   function rebuild() {
     if (!config || !width || !height) return;
-    const key = JSON.stringify([width, height, config.count, config.faceCount, config.faceBFromTop, config.view, config.scene.segments, config.scene.faces.map(face => [face.colors, face.effect, paletteKey(face)])]);
+    const key = JSON.stringify([width, height, config.count, config.faceCount, config.bothFaces, config.faceBFromTop, config.scene.segments, config.scene.faces.map(face => [face.colors, face.effect, paletteKey(face)])]);
     if (key === cacheKey) return;
     cacheKey = key;
     const radius = Math.min(width < 500 ? 4 : 4.5, (height - (width < 500 || height < 300 ? 94 : 160)) / (config.count - 1) * 0.36);
-    const indices = config.faceCount === 1 ? [0] : config.view === 'both' ? [0, 1] : [config.view === 'b' ? 1 : 0];
-    poles = indices.map((index, position) => ({ index, x: width * (indices.length === 2 ? position ? 0.69 : 0.38 : 0.55) }));
+    // Both faces always show the same, so one pole stands for both: face A is drawn.
+    poles = [{ index: 0, x: width * 0.55 }];
     palettes = config.scene.faces.map(face => makePalette(face, radius, width < 500));
     segments = config.scene.segments || defaultSegments(config.count * config.faceCount);
     mapping = segmentMap(config.scene, config.count * config.faceCount);
