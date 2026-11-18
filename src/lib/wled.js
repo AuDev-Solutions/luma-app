@@ -233,12 +233,10 @@ export function buildPayload(scene, device, count, faceCount = 2, target = 'all'
     on: scene.on,
     bri: masterBri(scene),
     transition: Math.round((scene.transition ?? 0.4) * 10),
-    seg: scene.faces
-      .slice(0, faceCount)
-      .map((face, id) => ({
-        ...facePayload(face, id, device),
-        ...(defaultLayout ? { start: id * count, stop: (id + 1) * count, grp: 1, spc: 0, of: 0 } : {}),
-      })),
+    seg: scene.faces.slice(0, faceCount).map((face, id) => ({
+      ...facePayload(face, id, device),
+      ...(defaultLayout ? { start: id * count, stop: (id + 1) * count, grp: 1, spc: 0, of: 0 } : {}),
+    })),
   };
 }
 

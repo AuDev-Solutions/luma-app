@@ -35,7 +35,7 @@ export const mounts = [
     count: 100,
     faceCount: 2,
     name: 'Dos caras · 200 LEDs',
-    description: '100 por cara · 3,96 m entre extremos',
+    description: '100 por cara en un solo cable de datos · 3,96 m entre extremos',
   },
   {
     id: 'faces-copy-200',
@@ -73,8 +73,12 @@ export const mounts = [
 ];
 export const supportedTotals = [...new Set(mounts.map(item => item.total))].sort((a, b) => a - b);
 export const mountById = id => mounts.find(item => item.id === id);
-// Copied faces are what the controller's outputs say, never a manual choice.
-export const selectableMounts = current => mounts.filter(item => !item.copiedFaces || item.id === current);
+// Copied faces are what the controller's outputs say, never a manual choice. While they are in use,
+// the two-face layouts of a single data cable are not offered: they describe other wiring.
+export const selectableMounts = current =>
+  mountById(current)?.copiedFaces
+    ? mounts.filter(item => (item.copiedFaces ? item.id === current : item.faceCount === 1))
+    : mounts.filter(item => !item.copiedFaces);
 
 // Two outputs that both start at LED 1 with the same length: face B repeats face A in hardware.
 export function copiedOutputs(config) {

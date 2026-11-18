@@ -147,6 +147,11 @@ test('Outputs that both start at LED 1 are two faces copied by the controller', 
     [],
     'copied faces are detected, never picked by hand',
   );
+  assert.deepEqual(
+    selectableMounts('faces-copy-100').map(item => item.id),
+    ['face-100', 'faces-copy-100', 'strip-200', 'test-50'],
+    'with copied faces, no second «Dos caras» for a single cable',
+  );
 });
 
 test('Copying face B: its output moves to LED 1 keeping pin, driver and limits; the pole then reports one face', async () => {
