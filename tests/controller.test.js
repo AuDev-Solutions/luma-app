@@ -153,9 +153,9 @@ test('Does not report success when the controller silently ignores the update', 
   }
 });
 
-test('All 32 curated presets have distinct IDs, valid settings and resolvable device effects', () => {
-  assert.equal(effects.length, 32);
-  assert.equal(new Set(effects.map(effect => effect.id)).size, 32);
+test('All 51 curated presets have distinct IDs, valid settings and resolvable device effects', () => {
+  assert.equal(effects.length, 51);
+  assert.equal(new Set(effects.map(effect => effect.id)).size, 51);
   for (const effect of effects) {
     const face = presetFace(effect);
     const scene = { on: true, faces: [face, structuredClone(face)] };

@@ -412,6 +412,236 @@ export const effects = [
     speedLabel: 'Gravedad',
     intensityLabel: 'Pelotas',
   },
+  // Added 2026-11-18: more classic WLED 1D effects (all registered in this firmware, FX.cpp).
+  {
+    id: 'marquee',
+    name: 'Marquesina',
+    description: 'Luces de feria que avanzan',
+    wled: 'Theater',
+    category: 'Fiesta',
+    colors: ['#ffc94d', '#140800'],
+    speed: 45,
+    brightness: 65,
+    intensityLabel: 'Separación',
+  },
+  {
+    id: 'colorloop',
+    name: 'Ciclo de color',
+    description: 'Todo el poste cambia de color despacio',
+    wled: 'Colorloop',
+    category: 'Calma',
+    colors: ['#ff4d6d', '#4dd2ff'],
+    speed: 20,
+    brightness: 60,
+    intensity: 255,
+    spectrum: true,
+    intensityLabel: 'Saturación',
+  },
+  {
+    id: 'curtain',
+    name: 'Cortina',
+    description: 'Un color sube y el otro lo releva',
+    wled: 'Wipe',
+    category: 'Movimiento',
+    colors: ['#38f2ff', '#ff3fb4'],
+    speed: 40,
+    brightness: 60,
+    intensityLabel: 'Nitidez',
+  },
+  {
+    id: 'lighthouse',
+    name: 'Faro',
+    description: 'Haces de luz que suben desde la base',
+    wled: 'Lighthouse',
+    category: 'Movimiento',
+    colors: ['#fff3c4', '#000000'],
+    speed: 45,
+    brightness: 65,
+    darkBackground: true,
+    intensityLabel: 'Estela',
+  },
+  {
+    id: 'embers',
+    name: 'Brasas',
+    description: 'Un fuego quieto que titila',
+    wled: 'Fire Flicker',
+    category: 'Calma',
+    colors: ['#ff6a1a', '#000000'],
+    speed: 40,
+    brightness: 60,
+    singleColor: true,
+    intensityLabel: 'Parpadeo',
+  },
+  {
+    id: 'comets',
+    name: 'Lluvia de cometas',
+    description: 'Varios cometas a la vez',
+    wled: 'Multi Comet',
+    category: 'Movimiento',
+    colors: ['#9af0ff', '#000000'],
+    speed: 50,
+    brightness: 65,
+    darkBackground: true,
+    intensityLabel: 'Estela',
+  },
+  {
+    id: 'pride',
+    name: 'Arcoíris suave',
+    description: 'Colores que se mezclan sin parar',
+    wled: 'Pride 2015',
+    category: 'Fiesta',
+    colors: ['#ff4d6d', '#4dd2ff'],
+    speed: 40,
+    brightness: 60,
+    spectrum: true,
+    ownPalette: true,
+    intensityLabel: null,
+  },
+  {
+    id: 'bpm',
+    name: 'Pulso de fiesta',
+    description: 'Franjas de colores que laten',
+    wled: 'Bpm',
+    category: 'Fiesta',
+    colors: ['#ff3b96', '#ffc34d'],
+    speed: 25,
+    brightness: 65,
+    palette: 'party',
+    intensityLabel: null,
+  },
+  {
+    id: 'mist',
+    name: 'Bruma',
+    description: 'Manchas de color que se transforman',
+    wled: 'Noise Pal',
+    category: 'Calma',
+    colors: ['#7a5cff', '#2cf0c8'],
+    speed: 20,
+    brightness: 55,
+    ownPalette: true,
+    intensityLabel: 'Escala',
+  },
+  {
+    id: 'confetti',
+    name: 'Confeti',
+    description: 'Puntos de colores que aparecen y se apagan',
+    wled: 'Colortwinkles',
+    category: 'Destellos',
+    colors: ['#ff3b96', '#ffc34d'],
+    speed: 50,
+    brightness: 65,
+    palette: 'party',
+    speedLabel: 'Desvanecer',
+    intensityLabel: 'Cantidad',
+  },
+  {
+    id: 'lake',
+    name: 'Lago',
+    description: 'Reflejos de agua en calma',
+    wled: 'Lake',
+    category: 'Calma',
+    colors: ['#0759bc', '#2cf0c8'],
+    speed: 30,
+    brightness: 60,
+    palette: 'ocean',
+    intensityLabel: null,
+  },
+  {
+    id: 'popcorn',
+    name: 'Palomitas',
+    description: 'Granos de luz que saltan',
+    wled: 'Popcorn',
+    category: 'Fiesta',
+    colors: ['#ffe27a', '#000000'],
+    speed: 50,
+    brightness: 65,
+    darkBackground: true,
+    intensityLabel: 'Cantidad',
+  },
+  {
+    id: 'glitter',
+    name: 'Brillantina',
+    description: 'Arcoíris con chispas blancas',
+    wled: 'Glitter',
+    category: 'Fiesta',
+    colors: ['#ff457f', '#42dfff'],
+    speed: 35,
+    brightness: 60,
+    palette: 'rainbow',
+    intensityLabel: 'Chispas',
+  },
+  {
+    id: 'shadows',
+    name: 'Sombras danzantes',
+    description: 'Focos de colores que se cruzan',
+    wled: 'Dancing Shadows',
+    category: 'Movimiento',
+    colors: ['#ff3b96', '#42dfff'],
+    speed: 40,
+    brightness: 65,
+    palette: 'party',
+    intensityLabel: 'Focos',
+  },
+  {
+    id: 'flow',
+    name: 'Corriente',
+    description: 'Zonas de color que fluyen',
+    wled: 'Flow',
+    category: 'Movimiento',
+    colors: ['#ff3b96', '#42dfff'],
+    speed: 35,
+    brightness: 60,
+    palette: 'party',
+    intensityLabel: 'Zonas',
+  },
+  {
+    id: 'fairy',
+    name: 'Hadas',
+    description: 'Luces cálidas que se encienden con calma',
+    wled: 'Fairytwinkle',
+    category: 'Destellos',
+    colors: ['#fff1c9', '#000000'],
+    speed: 40,
+    brightness: 60,
+    darkBackground: true,
+    intensityLabel: 'Frecuencia',
+  },
+  {
+    id: 'dissolve',
+    name: 'Disolución',
+    description: 'Un color se deshace en otro',
+    wled: 'Dissolve',
+    category: 'Destellos',
+    colors: ['#7cf5ff', '#ff5ec8'],
+    speed: 45,
+    brightness: 60,
+    speedLabel: 'Repetición',
+    intensityLabel: 'Rapidez',
+  },
+  {
+    id: 'pendulum',
+    name: 'Péndulo doble',
+    description: 'Dos luces que se cruzan',
+    wled: 'Sinelon Dual',
+    category: 'Movimiento',
+    colors: ['#ffd84d', '#4d7cff'],
+    speed: 45,
+    brightness: 65,
+    intensityLabel: 'Estela',
+  },
+  {
+    id: 'spots',
+    name: 'Focos',
+    description: 'Focos de luz que se abren y cierran',
+    wled: 'Spots Fade',
+    category: 'Movimiento',
+    colors: ['#ffffff', '#000000'],
+    speed: 45,
+    brightness: 60,
+    darkBackground: true,
+    speedLabel: 'Separación',
+    intensityLabel: 'Ancho',
+  },
 ];
 export const categories = ['Selección', 'Todos', 'Calma', 'Movimiento', 'Destellos', 'Fiesta', 'Favoritos'];
 const percent = raw => Math.round((raw / 255) * 100);
@@ -438,7 +668,7 @@ export function paletteKey(face) {
   return own && !paletteById(own)?.usesColors ? own : 'original';
 }
 // With palette 0 these WLED effects draw from the colour wheel (FX.cpp), not from the user's colours.
-const wheelEffects = new Set(['rainbow', 'starburst', 'juggle']);
+const wheelEffects = new Set(['rainbow', 'starburst', 'juggle', 'colorloop', 'pride']);
 export const usesWheel = face => paletteKey(face) === 'original' && wheelEffects.has(face.effect);
 // Colour pickers only matter when WLED builds the palette from them.
 export function usesColors(face) {
@@ -641,6 +871,106 @@ export function pixelColor(face, position, time, index, preparedColors) {
           palettePosition = ball / balls;
         }
       }
+      break;
+    }
+    case 'marquee': {
+      const gap = 2 + Math.round(amount * 4);
+      palettePosition = (((index - Math.floor(phase * 6)) % gap) + gap) % gap === 0 ? 0 : 1;
+      break;
+    }
+    case 'colorloop':
+      palettePosition = wrap(phase * 0.2);
+      break;
+    case 'curtain': {
+      const cycle = wrap(phase * 0.3);
+      palettePosition = cycle < 0.5 ? (position < cycle * 2 ? 0 : 1) : position < (cycle - 0.5) * 2 ? 1 : 0;
+      break;
+    }
+    case 'lighthouse':
+      intensity = 0.03 + 0.97 * Math.max(0, 1 - wrap(phase * 1.5 - position) * (14 - amount * 10));
+      break;
+    case 'embers':
+      intensity = 1 - amount * 0.5 * hash(index * 3.1 + Math.floor(phase * 10));
+      break;
+    case 'comets': {
+      let level = 0;
+      for (let comet = 0; comet < 3; comet++)
+        level = Math.max(level, 1 - wrap(phase * (0.5 + comet * 0.2) + comet * 0.33 - position) * (10 - amount * 6));
+      intensity = 0.03 + 0.97 * Math.max(0, level);
+      break;
+    }
+    case 'pride':
+      palettePosition = wrap(position * 0.7 + Math.sin(phase * 0.5) * 0.3 + phase * 0.1);
+      intensity = 0.6 + 0.4 * ((Math.sin(position * 9 + phase * 2) + 1) / 2);
+      break;
+    case 'bpm':
+      palettePosition = wrap(position * 2 + phase * 0.3);
+      intensity = 0.4 + 0.6 * ((Math.sin(phase * 6 - position * 10) + 1) / 2);
+      break;
+    case 'mist':
+      palettePosition =
+        (Math.sin(position * (3 + amount * 6) + phase) + Math.sin(position * 3.3 - phase * 0.7) + 2) / 4;
+      break;
+    case 'confetti': {
+      const age = wrap(phase * 0.7 + hash(index));
+      const life = amount * 0.6;
+      intensity = age < life ? 1 - age / life : 0;
+      palettePosition = hash(index * 7.3 + Math.floor(phase * 0.7 + hash(index)));
+      break;
+    }
+    case 'lake':
+      palettePosition = (Math.sin(position * 7 + phase) + 1) / 2;
+      intensity = 0.5 + 0.5 * ((Math.sin(position * 13 - phase * 1.3) + 1) / 2);
+      break;
+    case 'popcorn': {
+      intensity = 0;
+      const kernels = 1 + Math.round(amount * 5);
+      for (let kernel = 0; kernel < kernels; kernel++)
+        intensity = Math.max(
+          intensity,
+          glow(Math.abs(position - Math.abs(Math.sin(phase * (1 + kernel * 0.37) + kernel * 2.1)) * 0.9), 40),
+        );
+      break;
+    }
+    case 'glitter':
+      palettePosition = wrap(position - phase * 0.2);
+      intensity = hash(index * 1.3 + Math.floor(phase * 8)) > 1 - amount * 0.3 ? 1 : 0.7;
+      break;
+    case 'shadows': {
+      intensity = 0;
+      for (let spot = 0; spot < 3; spot++) {
+        const level = glow(Math.abs(position - (Math.sin(phase * (0.6 + spot * 0.3) + spot) + 1) / 2), 6);
+        if (level > intensity) {
+          intensity = level;
+          palettePosition = spot / 3;
+        }
+      }
+      break;
+    }
+    case 'flow': {
+      const zones = 2 + Math.round(amount * 6);
+      palettePosition = wrap(Math.floor(position * zones) / zones + phase * 0.1);
+      break;
+    }
+    case 'fairy':
+      intensity = 0.05 + 0.95 * Math.pow((Math.sin(index * 7.7 + phase * (1 + amount * 2)) + 1) / 2, 6);
+      break;
+    case 'dissolve': {
+      const cycle = wrap(phase * 0.25);
+      palettePosition = hash(index * 5.1 + 0.37) < (cycle < 0.5 ? cycle * 2 : 2 - cycle * 2) ? 1 : 0;
+      break;
+    }
+    case 'pendulum': {
+      const a = (Math.sin(phase * 2) + 1) / 2;
+      const first = glow(Math.abs(position - a), 9 - amount * 5),
+        second = glow(Math.abs(position - (1 - a)), 9 - amount * 5);
+      intensity = 0.03 + 0.97 * Math.max(first, second);
+      palettePosition = first >= second ? 0 : 1;
+      break;
+    }
+    case 'spots': {
+      const open = (Math.sin(phase * 2) + 1) / 2;
+      intensity = wrap(position * 6) < 0.05 + open * (0.1 + amount * 0.4) ? 1 : 0.03;
       break;
     }
     default:
