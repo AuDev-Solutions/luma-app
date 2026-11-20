@@ -43,8 +43,8 @@ export function escribirDatos() {
   mkdirSync(join(raiz, 'build'), { recursive: true });
   writeFileSync(join(raiz, 'build', 'datos.tex'), `% Generado por scripts/generar-datos.mjs desde datos/poste.json. No editar.\n${aMacrosTex(datos)}\n`);
   console.log('Listo: build/datos.tex');
-  // La configuración real del poste vive fuera de este repositorio (luma-app/.local); sin ella se conserva la plantilla publicada.
-  const cfgReal = join(raiz, '..', 'luma-app', '.local', 'cfg-2026-11-18.json');
+  // La configuración real del poste vive en luma-app/.local, que no se sube; sin ella se conserva la plantilla publicada.
+  const cfgReal = join(raiz, '..', '.local', 'cfg-2026-11-18.json');
   if (existsSync(cfgReal)) {
     mkdirSync(join(raiz, 'archivos'), { recursive: true });
     writeFileSync(join(raiz, 'archivos', 'cfg-plantilla.json'), JSON.stringify(generarCfgPlantilla(datos, JSON.parse(readFileSync(cfgReal, 'utf8'))), null, 2) + '\n');

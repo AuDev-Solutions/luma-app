@@ -7,7 +7,7 @@ Fuentes del manual técnico del poste LUMA (PCB_V2 · ESP32-S3 · WLED · app LU
 - Node.js 20 o superior.
 - [Tectonic](https://tectonic-typesetting.github.io) (compila el LaTeX): `herramientas/tectonic.exe`, su ruta en la variable `TECTONIC`, o en el PATH.
 - KiCad 10 (`kicad-cli`) para exportar la placa. Otra ruta: variable `KICAD_CLI`. Otro proyecto: variable `PCB_V2`.
-- Las carpetas hermanas `../luma-app` (con `npm install` hecho) y `../WLED` (en el commit documentado).
+- Esta carpeta va dentro de `luma-app`: `npm install` hecho en `luma-app` y la carpeta `WLED` junto a `luma-app` (en el commit documentado).
 - PlatformIO, solo para recompilar el firmware.
 
 ## Comandos
@@ -30,7 +30,7 @@ Fuentes del manual técnico del poste LUMA (PCB_V2 · ESP32-S3 · WLED · app LU
 - **Hoja de verificación**: `capitulos/hoja-contenido.tex` (la usan la hoja suelta y el anexo D).
 - **Estilo** (colores, recuadros, portada): `estilo/luma.sty` y `capitulos/portada.tex`.
 - **Diagramas**: `diagramas/*.tex` (TikZ).
-- **Efectos (anexo C)**: se generan solos desde `../luma-app/src/lib/scenes.js`.
+- **Efectos (anexo C)**: se generan solos desde `../src/lib/scenes.js`.
 
 ## Fotos
 

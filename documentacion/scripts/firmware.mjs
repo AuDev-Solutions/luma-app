@@ -12,7 +12,7 @@ import { cargarDatos } from './generar-datos.mjs';
 
 const raiz = fileURLToPath(new URL('..', import.meta.url));
 const datos = cargarDatos();
-const wled = join(raiz, '..', 'WLED');
+const wled = join(raiz, '..', '..', 'WLED');
 const platformio = join(homedir(), '.platformio');
 const compilacion = join(wled, '.pio', 'build', datos.wledEntorno);
 const salida = join(raiz, 'entregables', 'firmware');

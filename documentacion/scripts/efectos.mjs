@@ -1,4 +1,4 @@
-// Genera build/efectos.tex (anexo C) desde el catálogo real de LUMA: ../luma-app/src/lib/scenes.js.
+// Genera build/efectos.tex (anexo C) desde el catálogo real de LUMA: ../src/lib/scenes.js.
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -7,7 +7,7 @@ import { raiz } from './lib/tectonic.mjs';
 const escapar = texto => String(texto ?? '').replace(/[_%&#$]/g, c => `\\${c}`);
 
 export async function cargarEfectos() {
-  const { effects } = await import(pathToFileURL(join(raiz, '..', 'luma-app', 'src', 'lib', 'scenes.js')).href);
+  const { effects } = await import(pathToFileURL(join(raiz, '..', 'src', 'lib', 'scenes.js')).href);
   return effects;
 }
 

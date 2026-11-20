@@ -15,7 +15,7 @@ export function archivosEntregables() {
     [join(raiz, 'build', 'lista-fotos.md'), 'Lista-de-fotos.md'],
     [join(proyectoPcb, 'gerber.zip'), join('placa', 'gerber.zip')],
     [join(proyectoPcb, 'PCB_V2_schematic.pdf'), join('placa', 'PCB_V2_schematic.pdf')],
-    [join(raiz, '..', 'luma-app', 'dist-poste'), 'luma-poste'],
+    [join(raiz, '..', 'dist-poste'), 'luma-poste'],
   ];
 }
 

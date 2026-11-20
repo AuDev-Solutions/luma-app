@@ -1,5 +1,5 @@
 // Capturas de LUMA para el manual técnico, contra el poste simulado de las pruebas e2e.
-// Uso: npm run capturas:manual [-- carpetaSalida]   (por defecto ../documentacion/img/app/)
+// Uso: npm run capturas:manual [-- carpetaSalida]   (por defecto documentacion/img/app/)
 import { mkdirSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -8,7 +8,7 @@ import { chromium } from 'playwright-core';
 import { browserPath, createPole } from '../tests/e2e/mock-pole.mjs';
 import { effects as disenos } from '../src/lib/scenes.js';
 
-const salida = resolve(process.argv[2] ?? fileURLToPath(new URL('../../documentacion/img/app/', import.meta.url)));
+const salida = resolve(process.argv[2] ?? fileURLToPath(new URL('../documentacion/img/app/', import.meta.url)));
 mkdirSync(salida, { recursive: true });
 // Todos los efectos que usa LUMA existen en el poste simulado, para que la galería se vea como en un poste real.
 const efectosWled = [...new Set(disenos.flatMap(diseno => [diseno.wled, ...(diseno.aliases ?? [])]))];

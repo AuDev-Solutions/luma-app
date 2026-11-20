@@ -5,8 +5,8 @@ import { cargarDatos, generarCfgPlantilla } from '../scripts/generar-datos.mjs';
 
 const leerJson = ruta => JSON.parse(readFileSync(new URL(ruta, import.meta.url), 'utf8'));
 const datos = cargarDatos();
-// Configuración real del poste que funciona (fuera de este repositorio, contiene la red de casa).
-const cfgReal = leerJson('../../luma-app/.local/cfg-2026-11-18.json');
+// Configuración real del poste que funciona (en luma-app/.local, que no se sube: contiene la red de casa).
+const cfgReal = leerJson('../../.local/cfg-2026-11-18.json');
 const plantilla = generarCfgPlantilla(datos, cfgReal);
 
 test('dos salidas de 100 LEDs desde el LED 0: cara A en RMT, cara B en I2S, la B repite la A', () => {

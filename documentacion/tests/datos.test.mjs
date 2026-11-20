@@ -8,16 +8,16 @@ const leer = ruta => readFileSync(new URL(ruta, import.meta.url), 'utf8');
 const datos = cargarDatos();
 
 test('la versión de WLED coincide con el código del firmware', () => {
-  assert.equal(datos.wledVersion, JSON.parse(leer('../../WLED/package.json')).version);
+  assert.equal(datos.wledVersion, JSON.parse(leer('../../../WLED/package.json')).version);
 });
 
 test('el commit de WLED documentado es el que está en el repositorio', () => {
-  const head = execFileSync('git', ['-C', new URL('../../WLED', import.meta.url).pathname.replace(/^\/(\w:)/, '$1'), 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+  const head = execFileSync('git', ['-C', new URL('../../../WLED', import.meta.url).pathname.replace(/^\/(\w:)/, '$1'), 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
   assert.ok(head.startsWith(datos.wledCommit), `HEAD de WLED es ${head}`);
 });
 
 test('el entorno de compilación existe en platformio.ini', () => {
-  assert.ok(leer('../../WLED/platformio.ini').includes(`[env:${datos.wledEntorno}]`));
+  assert.ok(leer('../../../WLED/platformio.ini').includes(`[env:${datos.wledEntorno}]`));
 });
 
 test('producción: 100 LEDs por cara y el total cuadra', () => {
@@ -27,7 +27,7 @@ test('producción: 100 LEDs por cara y el total cuadra', () => {
 });
 
 test('los comandos de LUMA que cita el manual existen', () => {
-  const scripts = JSON.parse(leer('../../luma-app/package.json')).scripts;
+  const scripts = JSON.parse(leer('../../package.json')).scripts;
   for (const nombre of ['dev', 'test', 'test:e2e', 'build:poste', 'instalar:poste']) assert.ok(scripts[nombre], `falta npm run ${nombre}`);
 });
 

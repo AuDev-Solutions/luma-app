@@ -14,6 +14,10 @@ Abrir http://localhost:5173. Desde el celular, conectado a la misma Wi-Fi del co
 
 La vista previa utiliza un fondo estático y sprites de luz reutilizados. La animación se suspende al pausar, ocultar la pestaña o desplazar la vista fuera de pantalla; el color fijo solo se redibuja cuando cambia un ajuste. La resolución interna se limita a 2×. En vistas estrechas se enfatiza el ancho de los LED y se reduce el halo vertical para distinguir los colores; la vista ampliada permite examinar una o ambas caras. Estos cambios no alteran los efectos que ejecuta WLED.
 
+## Documentación
+
+El manual técnico del poste y la hoja de verificación están en [`documentacion/`](documentacion/README.md) (LaTeX + Tectonic). Desde esa carpeta: `npm run pdf` compila el manual y `npm test` lo revisa. Necesita la carpeta `WLED` junto a `luma-app`.
+
 ## Instalar LUMA dentro del poste (sin PC)
 
 ```powershell
