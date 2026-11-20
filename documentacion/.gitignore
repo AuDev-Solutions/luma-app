@@ -1,0 +1,6 @@
+build/
+herramientas/
+entregables/
+node_modules/
+.superpowers/
+.privado/
